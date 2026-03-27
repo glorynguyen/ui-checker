@@ -25,20 +25,36 @@
   let varOverrides = {};     // property → user-overridden value
 
   // --- Messaging ---
-  const port = chrome.runtime.connect({ name: 'figma-diff-panel' });
-  port.postMessage({ action: 'INIT', tabId: chrome.devtools.inspectedWindow.tabId });
+  const tabId = chrome.devtools.inspectedWindow.tabId;
+  let port = null;
 
-  port.onMessage.addListener((msg) => {
-    if (msg.action === 'ELEMENT_SELECTED') {
-      onElementSelected(msg.data);
-    } else if (msg.action === 'PICKER_CANCELLED') {
-      setPickerState(false);
-    }
-  });
+  function connectPort() {
+    port = chrome.runtime.connect({ name: 'figma-diff-panel' });
+    port.postMessage({ action: 'INIT', tabId });
+
+    port.onMessage.addListener((msg) => {
+      if (msg.action === 'ELEMENT_SELECTED') {
+        onElementSelected(msg.data);
+      } else if (msg.action === 'PICKER_CANCELLED') {
+        setPickerState(false);
+      }
+    });
+
+    port.onDisconnect.addListener(() => {
+      port = null;
+    });
+  }
+
+  connectPort();
+
+  function sendMessage(msg) {
+    if (!port) connectPort();
+    port.postMessage(msg);
+  }
 
   // --- Pick Element ---
   pickBtn.addEventListener('click', () => {
-    port.postMessage({ action: 'START_PICKER' });
+    sendMessage({ action: 'START_PICKER' });
     setPickerState(true);
   });
 
