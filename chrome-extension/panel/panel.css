@@ -78,6 +78,27 @@ body {
 }
 .btn-icon:hover { background: var(--bg-hover); border-radius: 4px; }
 
+/* --- Selector input --- */
+.selector-row {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.selector-input {
+  flex: 1;
+  padding: 4px 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.selector-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 /* --- Element info --- */
 .element-info {
   padding: 6px 10px;
@@ -327,6 +348,31 @@ body {
   font-size: 10px;
   outline: none;
   vertical-align: middle;
+}
+
+/* --- Variable Mappings --- */
+.mapping-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.mapping-controls select {
+  flex: 1;
+  padding: 3px 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-size: 11px;
+}
+.btn-sm {
+  padding: 3px 8px;
+  font-size: 10px;
+}
+.mapping-import-label {
+  cursor: pointer;
+  margin: 0;
 }
 
 .hidden { display: none !important; }

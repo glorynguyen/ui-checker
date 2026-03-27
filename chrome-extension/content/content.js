@@ -174,6 +174,14 @@
       activatePicker();
     } else if (msg.action === 'CANCEL_PICKER') {
       deactivatePicker();
+    } else if (msg.action === 'QUERY_SELECTOR') {
+      const el = document.querySelector(msg.selector);
+      if (el) {
+        const data = extractStyles(el);
+        chrome.runtime.sendMessage({ action: 'ELEMENT_SELECTED', data });
+      } else {
+        chrome.runtime.sendMessage({ action: 'SELECTOR_NOT_FOUND', selector: msg.selector });
+      }
     }
   });
 })();

@@ -18,6 +18,12 @@
     </button>
   </header>
 
+  <!-- Selector input -->
+  <div class="selector-row">
+    <input type="text" id="selector-input" class="selector-input" placeholder="Paste CSS selector (e.g. #app > div.card > img)">
+    <button id="selector-btn" class="btn btn-sm">Select</button>
+  </div>
+
   <!-- Selected element info -->
   <div id="element-info" class="element-info hidden">
     Selected: <strong id="element-name"></strong> (<span id="element-dims"></span>)
@@ -37,6 +43,23 @@
     <div class="setting-row">
       <label>Border radius tolerance (px):</label>
       <input type="number" id="tol-radius" value="2" min="0" max="10">
+    </div>
+
+    <h3 style="margin-top:12px">Variable Mappings</h3>
+    <div class="mapping-controls">
+      <select id="mapping-select">
+        <option value="">-- No saved mappings --</option>
+      </select>
+      <button id="mapping-load-btn" class="btn btn-sm" disabled>Load</button>
+      <button id="mapping-delete-btn" class="btn btn-sm" disabled>Del</button>
+    </div>
+    <div class="mapping-controls">
+      <button id="mapping-save-btn" class="btn btn-sm">Save Current</button>
+      <button id="mapping-export-btn" class="btn btn-sm" disabled>Export</button>
+      <label class="btn btn-sm mapping-import-label">
+        Import
+        <input type="file" id="mapping-import-input" accept=".json" hidden>
+      </label>
     </div>
   </div>
 
