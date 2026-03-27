@@ -211,7 +211,7 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 
 ## License
 
-[Your License Here]
+MIT
 
 ---
 
