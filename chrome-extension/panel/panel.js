@@ -399,6 +399,21 @@
     });
   });
 
+  // --- Clear ---
+  clearBtn.addEventListener('click', () => {
+    extractedData = null;
+    lastDiffReport = null;
+    currentVarMap = {};
+    varOverrides = {};
+    figmaInput.value = '';
+    extractedStyles.textContent = 'Pick an element to extract styles.';
+    elementInfo.classList.add('hidden');
+    resultsSection.classList.add('hidden');
+    resultsSummary.innerHTML = '';
+    resultsList.innerHTML = '';
+    compareBtn.disabled = true;
+  });
+
   // --- Variable Mappings ---
   function getSavedMappings(cb) {
     chrome.storage.local.get(['savedMappings'], (result) => {
@@ -544,19 +559,4 @@
 
   // Load mappings list on startup
   refreshMappingsList();
-
-  // --- Clear ---
-  clearBtn.addEventListener('click', () => {
-    extractedData = null;
-    lastDiffReport = null;
-    currentVarMap = {};
-    varOverrides = {};
-    figmaInput.value = '';
-    extractedStyles.textContent = 'Pick an element to extract styles.';
-    elementInfo.classList.add('hidden');
-    resultsSection.classList.add('hidden');
-    resultsSummary.innerHTML = '';
-    resultsList.innerHTML = '';
-    compareBtn.disabled = true;
-  });
 })();
