@@ -15,6 +15,9 @@ const Normalizer = {
 
     let v = String(value).trim();
 
+    // Resolve any remaining var() wrappers to fallback values
+    v = v.replace(/var\(\s*--[\w-]+\s*,\s*(.+?)\s*\)/g, '$1');
+
     // Lowercase general values
     v = v.toLowerCase();
 

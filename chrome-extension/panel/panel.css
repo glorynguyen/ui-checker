@@ -292,4 +292,41 @@ body {
   margin-left: 4px;
 }
 
+/* --- CSS Variable chips --- */
+.var-chip {
+  display: inline-block;
+  padding: 1px 6px;
+  background: rgba(79, 70, 229, 0.2);
+  color: var(--accent-hover);
+  border: 1px solid rgba(79, 70, 229, 0.4);
+  border-radius: 3px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  white-space: nowrap;
+  vertical-align: middle;
+  transition: background 0.1s, border-color 0.1s;
+}
+.var-chip:hover {
+  background: rgba(79, 70, 229, 0.35);
+  border-color: var(--accent-hover);
+}
+.var-resolved {
+  color: var(--text-muted);
+  font-style: italic;
+}
+.var-override-input {
+  width: 64px;
+  padding: 1px 4px;
+  margin-left: 4px;
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  color: var(--text-bright);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  outline: none;
+  vertical-align: middle;
+}
+
 .hidden { display: none !important; }

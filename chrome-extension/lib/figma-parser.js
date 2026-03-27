@@ -3,7 +3,7 @@
 
 const FigmaParser = {
   parse(cssText) {
-    if (!cssText || !cssText.trim()) return {};
+    if (!cssText || !cssText.trim()) return { styles: {}, varMap: {} };
 
     // Strip CSS comments
     let cleaned = cssText.replace(/\/\*[\s\S]*?\*\//g, '');
@@ -14,21 +14,54 @@ const FigmaParser = {
       .map(d => d.trim())
       .filter(d => d.includes(':'));
 
-    const result = {};
+    const styles = {};
+    const varMap = {};
 
     for (const decl of declarations) {
       const colonIdx = decl.indexOf(':');
       const prop = decl.slice(0, colonIdx).trim().toLowerCase();
-      const value = decl.slice(colonIdx + 1).trim();
+      const rawValue = decl.slice(colonIdx + 1).trim();
 
-      if (!prop || !value) continue;
+      if (!prop || !rawValue) continue;
+
+      // Extract var() metadata before resolving
+      const varInfo = this._extractVarInfo(rawValue);
+      const value = varInfo ? varInfo.resolved : rawValue;
 
       // Expand shorthands
       const expanded = this._expandShorthand(prop, value);
-      Object.assign(result, expanded);
+
+      // Map var info to each expanded property
+      if (varInfo) {
+        for (const expandedProp of Object.keys(expanded)) {
+          varMap[expandedProp] = {
+            varName: varInfo.varName,
+            fallback: varInfo.fallback,
+            original: rawValue
+          };
+        }
+      }
+
+      Object.assign(styles, expanded);
     }
 
-    return result;
+    return { styles, varMap };
+  },
+
+  // Extract var(--name, fallback) info and resolve to fallback
+  _extractVarInfo(value) {
+    const match = value.match(/var\(\s*(--[\w-]+)\s*(?:,\s*(.+?))?\s*\)$/);
+    if (!match) return null;
+
+    const varName = match[1];
+    const fallback = match[2] ? match[2].trim() : null;
+
+    return {
+      varName,
+      fallback,
+      resolved: fallback || value, // keep raw if no fallback
+      original: value
+    };
   },
 
   _expandShorthand(prop, value) {

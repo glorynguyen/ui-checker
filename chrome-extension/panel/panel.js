@@ -21,6 +21,8 @@
   // --- State ---
   let extractedData = null; // { element, dimensions, styles }
   let lastDiffReport = null;
+  let currentVarMap = {};    // property → { varName, fallback, original }
+  let varOverrides = {};     // property → user-overridden value
 
   // --- Messaging ---
   const port = chrome.runtime.connect({ name: 'figma-diff-panel' });
@@ -109,10 +111,20 @@
   });
 
   // --- Compare ---
-  compareBtn.addEventListener('click', () => {
+  function runComparison() {
     if (!extractedData || !figmaInput.value.trim()) return;
 
-    const figmaStyles = FigmaParser.parse(figmaInput.value);
+    const parsed = FigmaParser.parse(figmaInput.value);
+    currentVarMap = parsed.varMap;
+
+    // Apply user overrides to styles before normalizing
+    const figmaStyles = { ...parsed.styles };
+    for (const [prop, val] of Object.entries(varOverrides)) {
+      if (prop in figmaStyles) {
+        figmaStyles[prop] = val;
+      }
+    }
+
     const normalizedFigma = Normalizer.normalize(figmaStyles);
     const normalizedBrowser = Normalizer.normalize(extractedData.styles);
 
@@ -126,7 +138,9 @@
     };
 
     renderResults(report);
-  });
+  }
+
+  compareBtn.addEventListener('click', runComparison);
 
   // --- Render results ---
   function renderResults(report) {
@@ -231,14 +245,71 @@
     const valueClass = r.status === 'match' ? 'match' :
                        r.status === 'missing' ? 'missing' : 'mismatch';
 
+    // Build expected column with var chip if applicable
+    const varInfo = currentVarMap[r.property];
+    let expectedCol = '';
+    if (varInfo) {
+      const overridden = varOverrides[r.property];
+      const displayValue = overridden || r.expected;
+      expectedCol = `<span class="result-label">exp</span> `
+        + `<span class="var-chip" data-prop="${escapeHtml(r.property)}" title="${escapeHtml(varInfo.original)}">${escapeHtml(varInfo.varName)}</span>`
+        + ` <span class="result-value var-resolved">${escapeHtml(displayValue)}</span>`
+        + colorSwatchHtml(r.property, displayValue);
+    } else {
+      expectedCol = `<span class="result-label">exp</span> ${expectedHtml}`;
+    }
+
     row.innerHTML = `
       <span class="result-icon" style="color:${iconColor}">${icon}</span>
       <span class="result-prop">${r.property}${severityHtml}</span>
-      <span class="result-expected"><span class="result-label">exp</span> ${expectedHtml}</span>
-      <span class="result-actual"><span class="result-label">act</span> <span class="result-value ${valueClass}">${r.actual !== null ? r.actual : 'n/a'}</span>${colorSwatchHtml(r.property, r.actual)}${noteHtml}</span>
+      <span class="result-expected">${expectedCol}</span>
+      <span class="result-actual"><span class="result-label">act</span> <span class="result-value ${valueClass}">${r.actual !== null ? escapeHtml(r.actual) : 'n/a'}</span>${colorSwatchHtml(r.property, r.actual)}${noteHtml}</span>
     `;
 
+    // Attach click handler to var chip
+    const chip = row.querySelector('.var-chip');
+    if (chip) {
+      chip.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openVarEditor(chip, r.property, varInfo);
+      });
+    }
+
     return row;
+  }
+
+  function openVarEditor(chip, property, varInfo) {
+    // Don't open if already editing
+    if (chip.parentElement.querySelector('.var-override-input')) return;
+
+    const currentValue = varOverrides[property] || varInfo.fallback || '';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'var-override-input';
+    input.value = currentValue;
+    input.placeholder = varInfo.fallback || 'value';
+
+    // Insert after the chip
+    chip.after(input);
+    input.focus();
+    input.select();
+
+    const commit = () => {
+      const newVal = input.value.trim();
+      if (newVal && newVal !== varInfo.fallback) {
+        varOverrides[property] = newVal;
+      } else {
+        delete varOverrides[property];
+      }
+      input.remove();
+      runComparison();
+    };
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') commit();
+      if (e.key === 'Escape') input.remove();
+    });
+    input.addEventListener('blur', commit);
   }
 
   function formatValue(property, value) {
@@ -293,6 +364,8 @@
   clearBtn.addEventListener('click', () => {
     extractedData = null;
     lastDiffReport = null;
+    currentVarMap = {};
+    varOverrides = {};
     figmaInput.value = '';
     extractedStyles.textContent = 'Pick an element to extract styles.';
     elementInfo.classList.add('hidden');
