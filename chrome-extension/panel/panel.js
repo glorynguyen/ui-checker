@@ -25,12 +25,23 @@
   const mappingSaveBtn = document.getElementById('mapping-save-btn');
   const mappingExportBtn = document.getElementById('mapping-export-btn');
   const mappingImportInput = document.getElementById('mapping-import-input');
+  const batchToggle = document.getElementById('batch-toggle');
+  const batchInfo = document.getElementById('batch-info');
+  const batchStatus = document.getElementById('batch-status');
+  const batchResultsSection = document.getElementById('batch-results-section');
+  const batchResultsSummary = document.getElementById('batch-results-summary');
+  const batchResultsList = document.getElementById('batch-results-list');
+  const batchCopyBtn = document.getElementById('batch-copy-btn');
+  const batchClearBtn = document.getElementById('batch-clear-btn');
 
   // --- State ---
   let extractedData = null; // { element, dimensions, styles }
   let lastDiffReport = null;
   let currentVarMap = {};    // property → { varName, fallback, original }
   let varOverrides = {};     // property → user-overridden value
+  let batchMode = false;
+  let batchData = null;      // array of { element, dimensions, styles }
+  let lastBatchReports = null;
 
   // --- Messaging ---
   const tabId = chrome.devtools.inspectedWindow.tabId;
@@ -48,6 +59,12 @@
       } else if (msg.action === 'SELECTOR_NOT_FOUND') {
         pickStatus.textContent = `No element found for: ${msg.selector}`;
         pickStatus.classList.add('active');
+      } else if (msg.action === 'BATCH_EXTRACTED') {
+        onBatchExtracted(msg.data, msg.total, msg.truncated);
+      } else if (msg.action === 'BATCH_EMPTY') {
+        batchStatus.textContent = `No elements found for: ${msg.selector}`;
+        batchData = null;
+        updateCompareBtn();
       }
     });
 
@@ -76,9 +93,15 @@
     sendMessage({ action: 'QUERY_SELECTOR', selector });
   }
 
-  selectorBtn.addEventListener('click', queryBySelector);
+  selectorBtn.addEventListener('click', () => {
+    if (batchMode) queryBatchSelector();
+    else queryBySelector();
+  });
   selectorInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') queryBySelector();
+    if (e.key === 'Enter') {
+      if (batchMode) queryBatchSelector();
+      else queryBySelector();
+    }
   });
 
   function setPickerState(active) {
@@ -114,7 +137,11 @@
   figmaInput.addEventListener('input', updateCompareBtn);
 
   function updateCompareBtn() {
-    compareBtn.disabled = !(extractedData && figmaInput.value.trim());
+    if (batchMode) {
+      compareBtn.disabled = !(batchData && figmaInput.value.trim());
+    } else {
+      compareBtn.disabled = !(extractedData && figmaInput.value.trim());
+    }
   }
 
   // --- Settings ---
@@ -149,6 +176,197 @@
     }
   });
 
+  // --- Batch mode ---
+  batchToggle.addEventListener('click', () => {
+    batchMode = !batchMode;
+    batchToggle.classList.toggle('batch-active', batchMode);
+    batchInfo.classList.toggle('hidden', !batchMode);
+    // Update selector placeholder
+    selectorInput.placeholder = batchMode
+      ? 'Selector matching multiple elements (e.g. .card, ul > li)'
+      : 'Paste CSS selector (e.g. #app > div.card > img)';
+    // Update figma textarea placeholder
+    figmaInput.placeholder = batchMode
+      ? 'Paste CSS blocks separated by /* label */ comments or blank lines...'
+      : 'Paste CSS from Figma Dev Mode here...';
+    updateCompareBtn();
+  });
+
+  function queryBatchSelector() {
+    const selector = selectorInput.value.trim();
+    if (!selector) return;
+    sendMessage({ action: 'BATCH_EXTRACT', selector });
+    batchStatus.textContent = 'Extracting styles...';
+  }
+
+  function onBatchExtracted(data, total, truncated) {
+    batchData = data;
+    let statusText = `${data.length} elements extracted`;
+    if (truncated) {
+      statusText += ` (capped at ${data.length} of ${total})`;
+    }
+    batchStatus.textContent = statusText;
+
+    // Show extracted styles summary in the right panel
+    const lines = data.map((d, i) => `/* ${d.element} (${d.dimensions.width}x${d.dimensions.height}) */`).join('\n');
+    extractedStyles.textContent = lines;
+    elementInfo.classList.add('hidden');
+    updateCompareBtn();
+  }
+
+  function runBatchComparison() {
+    if (!batchData || !figmaInput.value.trim()) return;
+
+    const figmaBlocks = FigmaParser.parseMulti(figmaInput.value);
+    const tolerance = getTolerance();
+    const reports = [];
+    const count = Math.min(batchData.length, figmaBlocks.length);
+
+    for (let i = 0; i < count; i++) {
+      const el = batchData[i];
+      const block = figmaBlocks[i];
+
+      const figmaStyles = { ...block.styles };
+      // Apply any variable overrides
+      for (const [prop, val] of Object.entries(varOverrides)) {
+        if (prop in figmaStyles) figmaStyles[prop] = val;
+      }
+
+      const normalizedFigma = Normalizer.normalize(figmaStyles);
+      const normalizedBrowser = Normalizer.normalize(el.styles);
+      const report = DiffEngine.compare(normalizedFigma, normalizedBrowser, tolerance);
+
+      reports.push({
+        ...report,
+        element: el.element,
+        dimensions: el.dimensions,
+        label: block.label
+      });
+    }
+
+    lastBatchReports = reports;
+    renderBatchResults(reports, batchData.length, figmaBlocks.length);
+  }
+
+  function renderBatchResults(reports, totalElements, totalBlocks) {
+    batchResultsSection.classList.remove('hidden');
+    resultsSection.classList.add('hidden');
+
+    // Aggregate summary
+    let totalMatched = 0, totalMismatched = 0, totalMissing = 0, totalProps = 0;
+    for (const r of reports) {
+      totalMatched += r.summary.matched;
+      totalMismatched += r.summary.mismatched;
+      totalMissing += r.summary.missing;
+      totalProps += r.summary.total;
+    }
+
+    let summaryHtml = `<span class="stat">${reports.length} elements</span>`;
+    summaryHtml += `<span class="stat stat-matched">${totalMatched}/${totalProps} matched</span>`;
+    summaryHtml += `<span class="stat stat-mismatched">${totalMismatched} mismatched</span>`;
+    summaryHtml += `<span class="stat stat-missing">${totalMissing} missing</span>`;
+
+    if (totalElements !== totalBlocks) {
+      summaryHtml += `<span class="stat" style="color:var(--orange)">&#9888; ${totalElements} elements vs ${totalBlocks} CSS blocks</span>`;
+    }
+    batchResultsSummary.innerHTML = summaryHtml;
+
+    // Per-element accordion
+    batchResultsList.innerHTML = '';
+    for (const report of reports) {
+      const section = document.createElement('div');
+      section.className = 'batch-element-section';
+
+      const header = document.createElement('div');
+      header.className = 'batch-element-header';
+      const s = report.summary;
+      header.innerHTML = `
+        <span class="arrow">&#9654;</span>
+        <span class="batch-element-name">${escapeHtml(report.label || report.element)}</span>
+        <span class="batch-element-stats">
+          <span style="color:var(--green)">${s.matched}/${s.total}</span>
+          ${s.mismatched > 0 ? `<span style="color:var(--red)">${s.mismatched} diff</span>` : ''}
+          ${s.missing > 0 ? `<span style="color:var(--orange)">${s.missing} miss</span>` : ''}
+        </span>
+      `;
+
+      const content = document.createElement('div');
+      content.className = 'batch-element-content';
+
+      // Element details
+      const dimLine = document.createElement('div');
+      dimLine.className = 'element-info';
+      dimLine.style.marginBottom = '6px';
+      dimLine.innerHTML = `<strong>${escapeHtml(report.element)}</strong> (${report.dimensions.width} x ${report.dimensions.height})`;
+      content.appendChild(dimLine);
+
+      // Reuse existing result rendering for this element
+      const sorted = [...report.results].sort((a, b) => {
+        const statusOrder = { mismatch: 0, missing: 1, match: 2 };
+        const severityOrder = { major: 0, minor: 1, negligible: 2 };
+        const sa = statusOrder[a.status] ?? 3;
+        const sb = statusOrder[b.status] ?? 3;
+        if (sa !== sb) return sa - sb;
+        return (severityOrder[a.severity] ?? 3) - (severityOrder[b.severity] ?? 3);
+      });
+
+      const mismatches = sorted.filter(r => r.status === 'mismatch' || r.status === 'missing');
+      const matches = sorted.filter(r => r.status === 'match');
+
+      if (mismatches.length > 0) {
+        const grouped = groupByPropertyGroup(mismatches);
+        for (const [group, items] of Object.entries(grouped)) {
+          const groupEl = document.createElement('div');
+          groupEl.className = 'result-group';
+          groupEl.innerHTML = `<div class="result-group-header">${group}</div>`;
+          items.forEach(r => groupEl.appendChild(createResultRow(r)));
+          content.appendChild(groupEl);
+        }
+      }
+
+      if (matches.length > 0) {
+        const toggle = document.createElement('button');
+        toggle.className = 'matched-toggle';
+        toggle.innerHTML = `<span class="arrow">&#9654;</span> ${matches.length} matched`;
+        const matchContent = document.createElement('div');
+        matchContent.className = 'matched-content';
+
+        const grouped = groupByPropertyGroup(matches);
+        for (const [group, items] of Object.entries(grouped)) {
+          const groupEl = document.createElement('div');
+          groupEl.className = 'result-group';
+          groupEl.innerHTML = `<div class="result-group-header">${group}</div>`;
+          items.forEach(r => groupEl.appendChild(createResultRow(r)));
+          matchContent.appendChild(groupEl);
+        }
+
+        toggle.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggle.classList.toggle('open');
+          matchContent.classList.toggle('open');
+        });
+
+        content.appendChild(toggle);
+        content.appendChild(matchContent);
+      }
+
+      header.addEventListener('click', () => {
+        header.classList.toggle('open');
+        content.classList.toggle('open');
+      });
+
+      // Auto-open sections with mismatches
+      if (s.mismatched > 0 || s.missing > 0) {
+        header.classList.add('open');
+        content.classList.add('open');
+      }
+
+      section.appendChild(header);
+      section.appendChild(content);
+      batchResultsList.appendChild(section);
+    }
+  }
+
   // --- Compare ---
   function runComparison() {
     if (!extractedData || !figmaInput.value.trim()) return;
@@ -179,7 +397,13 @@
     renderResults(report);
   }
 
-  compareBtn.addEventListener('click', runComparison);
+  compareBtn.addEventListener('click', () => {
+    if (batchMode) {
+      runBatchComparison();
+    } else {
+      runComparison();
+    }
+  });
 
   // --- Render results ---
   function renderResults(report) {
@@ -412,6 +636,54 @@
     resultsSummary.innerHTML = '';
     resultsList.innerHTML = '';
     compareBtn.disabled = true;
+  });
+
+  // --- Batch Clear ---
+  batchClearBtn.addEventListener('click', () => {
+    batchData = null;
+    lastBatchReports = null;
+    figmaInput.value = '';
+    extractedStyles.textContent = 'Pick an element to extract styles.';
+    batchStatus.textContent = '';
+    batchResultsSection.classList.add('hidden');
+    batchResultsSummary.innerHTML = '';
+    batchResultsList.innerHTML = '';
+    compareBtn.disabled = true;
+  });
+
+  // --- Batch Copy Report ---
+  batchCopyBtn.addEventListener('click', () => {
+    if (!lastBatchReports || lastBatchReports.length === 0) return;
+
+    let md = `## Batch Style Diff Report\n`;
+    md += `**Elements:** ${lastBatchReports.length} compared | **Date:** ${new Date().toISOString().slice(0, 10)}\n\n`;
+
+    // Summary table
+    md += `### Summary\n`;
+    md += `| Element | Matched | Mismatched | Missing |\n`;
+    md += `|---------|---------|------------|--------|\n`;
+    for (const r of lastBatchReports) {
+      md += `| \`${r.label || r.element}\` | ${r.summary.matched}/${r.summary.total} | ${r.summary.mismatched} | ${r.summary.missing} |\n`;
+    }
+    md += '\n';
+
+    // Per-element details
+    for (const r of lastBatchReports) {
+      const mismatches = r.results.filter(x => x.status === 'mismatch' || x.status === 'missing');
+      if (mismatches.length === 0) continue;
+      md += `### ${r.label || r.element} (${r.dimensions.width} x ${r.dimensions.height})\n`;
+      md += `| Property | Expected | Actual | Severity |\n`;
+      md += `|----------|----------|--------|----------|\n`;
+      for (const m of mismatches) {
+        md += `| ${m.property} | ${m.expected} | ${m.actual ?? 'n/a'} | ${m.severity} |\n`;
+      }
+      md += '\n';
+    }
+
+    navigator.clipboard.writeText(md).then(() => {
+      batchCopyBtn.textContent = 'Copied!';
+      setTimeout(() => { batchCopyBtn.textContent = 'Copy Report'; }, 1500);
+    });
   });
 
   // --- Variable Mappings ---

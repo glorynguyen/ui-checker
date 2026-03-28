@@ -22,6 +22,14 @@
   <div class="selector-row">
     <input type="text" id="selector-input" class="selector-input" placeholder="Paste CSS selector (e.g. #app > div.card > img)">
     <button id="selector-btn" class="btn btn-sm">Select</button>
+    <button id="batch-toggle" class="btn btn-sm" title="Toggle batch mode to compare multiple elements">Batch</button>
+  </div>
+
+  <!-- Batch mode info -->
+  <div id="batch-info" class="element-info hidden">
+    <strong>Batch Mode</strong> — enter a selector matching multiple elements, then paste one Figma CSS block per element
+    (separated by <code>/* label */</code> comments or blank lines).
+    <div id="batch-status" class="batch-status"></div>
   </div>
 
   <!-- Selected element info -->
@@ -80,13 +88,23 @@
     <button id="compare-btn" class="btn btn-primary" disabled>Compare</button>
   </div>
 
-  <!-- Results -->
+  <!-- Results (single mode) -->
   <div id="results-section" class="results-section hidden">
     <div id="results-summary" class="results-summary"></div>
     <div id="results-list" class="results-list"></div>
     <div class="actions">
       <button id="copy-btn" class="btn">Copy Report</button>
       <button id="clear-btn" class="btn">Clear</button>
+    </div>
+  </div>
+
+  <!-- Results (batch mode) -->
+  <div id="batch-results-section" class="results-section hidden">
+    <div id="batch-results-summary" class="results-summary"></div>
+    <div id="batch-results-list" class="batch-results-list"></div>
+    <div class="actions">
+      <button id="batch-copy-btn" class="btn">Copy Report</button>
+      <button id="batch-clear-btn" class="btn">Clear</button>
     </div>
   </div>
 

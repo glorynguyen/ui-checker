@@ -375,4 +375,66 @@ body {
   margin: 0;
 }
 
+/* --- Batch mode --- */
+.btn-sm.batch-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.batch-status {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.batch-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.batch-element-section {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.batch-element-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-surface);
+  cursor: pointer;
+  font-size: 11px;
+  user-select: none;
+}
+.batch-element-header:hover { background: var(--bg-hover); }
+
+.batch-element-header .arrow {
+  transition: transform 0.15s;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.batch-element-header.open .arrow { transform: rotate(90deg); }
+
+.batch-element-name {
+  font-family: var(--font-mono);
+  color: var(--text-bright);
+  flex: 1;
+}
+
+.batch-element-stats {
+  display: flex;
+  gap: 8px;
+  font-size: 10px;
+}
+
+.batch-element-content {
+  display: none;
+  padding: 4px 8px 8px;
+}
+.batch-element-content.open { display: block; }
+
 .hidden { display: none !important; }

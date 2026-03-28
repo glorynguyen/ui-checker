@@ -182,6 +182,40 @@ const FigmaParser = {
            /^rgba?\(/.test(value) ||
            /^hsla?\(/.test(value) ||
            /^(transparent|currentColor|inherit)$/i.test(value);
+  },
+
+  /**
+   * Parse multi-block CSS text into an array of { label, styles, varMap }.
+   * Blocks are delimited by CSS comments or double-newlines.
+   */
+  parseMulti(cssText) {
+    if (!cssText || !cssText.trim()) return [];
+
+    // Try splitting by CSS comments first
+    const commentPattern = /\/\*\s*(.+?)\s*\*\//g;
+    const comments = [...cssText.matchAll(commentPattern)];
+
+    if (comments.length > 0) {
+      const blocks = [];
+      for (let i = 0; i < comments.length; i++) {
+        const label = comments[i][1].trim();
+        const start = comments[i].index + comments[i][0].length;
+        const end = i + 1 < comments.length ? comments[i + 1].index : cssText.length;
+        const blockText = cssText.slice(start, end).trim();
+        if (blockText) {
+          const parsed = this.parse(blockText);
+          blocks.push({ label, ...parsed });
+        }
+      }
+      return blocks;
+    }
+
+    // Fallback: split by double-newlines
+    const rawBlocks = cssText.split(/\n\s*\n/).filter(b => b.trim());
+    return rawBlocks.map((block, i) => {
+      const parsed = this.parse(block);
+      return { label: `Element ${i + 1}`, ...parsed };
+    });
   }
 };
 

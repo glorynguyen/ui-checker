@@ -182,6 +182,28 @@
       } else {
         chrome.runtime.sendMessage({ action: 'SELECTOR_NOT_FOUND', selector: msg.selector });
       }
+    } else if (msg.action === 'BATCH_EXTRACT') {
+      const MAX_BATCH = 50;
+      let elements;
+      if (msg.mode === 'children') {
+        const parent = document.querySelector(msg.selector);
+        elements = parent ? Array.from(parent.children) : [];
+      } else {
+        elements = Array.from(document.querySelectorAll(msg.selector));
+      }
+
+      if (elements.length === 0) {
+        chrome.runtime.sendMessage({ action: 'BATCH_EMPTY', selector: msg.selector });
+      } else {
+        const truncated = elements.length > MAX_BATCH;
+        const batch = elements.slice(0, MAX_BATCH).map(el => extractStyles(el));
+        chrome.runtime.sendMessage({
+          action: 'BATCH_EXTRACTED',
+          data: batch,
+          total: elements.length,
+          truncated
+        });
+      }
     }
   });
 })();

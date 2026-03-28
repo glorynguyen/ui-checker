@@ -6,15 +6,96 @@ A Chrome DevTools extension that helps frontend developers catch visual discrepa
 
 ## Features
 
-- **Element Picker**: Select any element on the page directly from DevTools
-- **Style Extraction**: Automatically extracts computed CSS styles from selected elements
-- **Figma CSS Parsing**: Paste CSS copied from Figma Dev Mode for comparison
-- **Smart Diff Engine**: Compares styles with configurable tolerance for:
-  - Spacing (margin, padding, gap) - ±2px default tolerance
-  - Colors - ±5 per channel default tolerance
-  - Border radius - ±2px default tolerance
-- **Visual Results**: Clear ✅/❌ indicators showing matched and mismatched properties
-- **Export**: Copy diff reports for sharing with your team
+### Element Selection
+- **Visual Element Picker** -- click "Pick Element", hover to see a blue highlight overlay with tooltip showing tag, classes, and dimensions. Click to select. Press `Esc` to cancel.
+- **CSS Selector Input** -- type any CSS selector directly (e.g., `#app > div.card > img`) and press Enter or click "Select" to query the element without using the visual picker.
+
+### Figma CSS Parsing
+- Paste CSS copied from Figma Dev Mode
+- Automatic shorthand expansion for: `padding`, `margin`, `border-radius`, `border`, `gap`, `background`
+- CSS comment stripping
+- CSS variable detection -- extracts `var(--name, fallback)` syntax, preserving variable name and fallback value
+
+### Style Extraction
+Automatically extracts 38 computed CSS properties from selected elements via `getComputedStyle()`, covering 5 categories:
+
+| Category | Properties |
+|----------|-----------|
+| **Spacing** | `margin-top`, `margin-right`, `margin-bottom`, `margin-left`, `padding-top`, `padding-right`, `padding-bottom`, `padding-left`, `gap`, `row-gap`, `column-gap` |
+| **Typography** | `font-family`, `font-size`, `font-weight`, `line-height`, `letter-spacing`, `text-align`, `text-transform`, `text-decoration`, `color` |
+| **Sizing** | `width`, `height`, `min-width`, `max-width`, `min-height`, `max-height` |
+| **Layout** | `display`, `flex-direction`, `align-items`, `justify-content`, `flex-wrap`, `position`, `top`, `right`, `bottom`, `left`, `z-index` |
+| **Visual** | `background-color`, `border-*-width`, `border-*-style`, `border-*-color`, `border-*-radius`, `box-shadow`, `opacity`, `overflow` |
+
+### Smart Diff Engine
+- Tolerance-aware comparison with configurable thresholds
+- **Severity classification**: major, minor, negligible
+  - **Major**: font-size > 2px diff, font-weight mismatch, large color differences, string mismatches
+  - **Minor**: spacing differences <= 4px, radius differences <= 2px, small color diffs
+  - **Negligible**: subpixel differences (< 1px), values within tolerance
+- Subpixel rounding detection (auto-matches with note)
+- Per-channel color comparison with tolerance
+
+### Style Normalization
+Values are normalized before comparison for accurate matching:
+- Hex to RGB conversion (`#1A1A1A` to `rgb(26, 26, 26)`)
+- Font-weight keyword normalization (`bold` to `700`, `normal` to `400`, `thin` to `100`, etc.)
+- Font-family primary extraction (strips fallback fonts, lowercases)
+- `rem` to `px` conversion (16px base)
+- `normal` line-height to computed pixel value (1.2x font-size)
+- Zero-unit stripping (`0px` to `0`)
+- Bare number to px conversion for applicable Figma values
+- Border `none` normalization
+
+### CSS Variable Support
+- Detects CSS variables with fallback values in pasted Figma CSS
+- Displays clickable variable chips in diff results showing the variable name
+- Hover to see original `var()` syntax
+- Click to open an inline editor to override the fallback value
+- Overrides are applied instantly and the comparison re-runs
+
+### Variable Mappings
+Save and share CSS variable override sets:
+- **Save** current overrides as a named mapping
+- **Load** a saved mapping to apply overrides
+- **Delete** mappings you no longer need
+- **Export** a mapping as a JSON file for team sharing
+- **Import** mapping JSON files from teammates
+- All mappings are persisted to `chrome.storage`
+
+### Visual Results Display
+- Summary statistics bar: matched / mismatched / missing counts
+- Color-coded indicators: green checkmark (match), red X (mismatch), orange warning (missing)
+- Results grouped by property category (Spacing, Typography, Sizing, Layout, Visual)
+- Severity badges on mismatches (major / minor)
+- Color swatches displayed next to color property values
+- Matched properties collapsed by default with expandable toggle
+- Tolerance notes shown when values are within threshold
+
+### Batch Element Comparison
+Compare multiple elements in a single operation:
+- Toggle **Batch Mode** with the "Batch" button
+- Enter a CSS selector matching multiple elements (e.g., `.card`, `ul > li`)
+- Paste multi-block Figma CSS separated by `/* label */` comments or blank lines
+- Click "Compare" to diff all elements at once
+- Accordion results view with per-element summary (auto-opens sections with mismatches)
+- Aggregate summary across all compared elements
+- Warning shown when element count doesn't match CSS block count
+- Capped at 50 elements for performance
+- Batch-specific markdown report with summary table
+
+### Configurable Tolerance Settings
+- **Spacing tolerance** (px): acceptable pixel difference for margins, padding, gap, positioning (default: 2)
+- **Color tolerance** (per channel): acceptable RGB channel difference (default: 5)
+- **Border radius tolerance** (px): acceptable pixel difference for border-radius (default: 2)
+- Settings persist across browser sessions via `chrome.storage`
+
+### Report Export
+- Generates a markdown-formatted diff report
+- Includes: element info, dimensions, date, all mismatches with severity, match count
+- Single-click copy to clipboard
+- Batch mode generates a summary table followed by per-element detail sections
+- Paste into PR descriptions, Slack, or documentation
 
 ---
 
@@ -30,7 +111,7 @@ A Chrome DevTools extension that helps frontend developers catch visual discrepa
 
 2. **Open Chrome Extensions page:**
    - Navigate to `chrome://extensions/`
-   - Or click Chrome menu → More tools → Extensions
+   - Or click Chrome menu > More tools > Extensions
 
 3. **Enable Developer mode:**
    - Toggle the "Developer mode" switch in the top-right corner
@@ -41,70 +122,54 @@ A Chrome DevTools extension that helps frontend developers catch visual discrepa
 
 5. **Verify installation:**
    - The extension "Figma CSS Diff" should appear in your extensions list
-   - You'll see the extension icon in your toolbar (optional)
 
 ---
 
 ## How to Use
 
-### Step 1: Open DevTools
+### Single Element Comparison
 
-1. Navigate to any webpage you want to inspect
-2. Open Chrome DevTools (F12 or Cmd+Option+I on Mac, Ctrl+Shift+I on Windows)
-3. Look for the **"Figma CSS Diff"** tab in the DevTools panel
+1. **Open DevTools**: Navigate to any webpage. Open Chrome DevTools (`F12` or `Cmd+Option+I` on Mac). Find the **"Figma CSS Diff"** tab.
 
-### Step 2: Select an Element
+2. **Select an element**: Either click **"Pick Element"** and click on the page, or type a CSS selector in the selector input and press Enter.
 
-1. In the Figma CSS Diff panel, click the **"Pick Element"** button
-2. Your cursor will change - hover over elements on the page to see highlights
-3. Click on the element you want to inspect
-4. The element's tag, classes, and dimensions will appear in the panel
+3. **Paste Figma CSS**: Open Figma Dev Mode, select the corresponding component, copy the CSS, and paste it into the "Figma CSS" textarea.
 
-### Step 3: Get Figma CSS
+4. **Compare**: Click **"Compare"** to see the diff results with severity indicators.
 
-1. Open your Figma design file
-2. Enter **Dev Mode** (toggle in the top-right of Figma)
-3. Select the corresponding component/frame in Figma
-4. Copy the CSS from Figma's Inspect panel (usually shows as "CSS" tab)
-5. Paste the CSS into the **"Figma CSS"** textarea in the extension
+5. **Export**: Click **"Copy Report"** to copy a markdown report to your clipboard.
 
-### Step 4: Compare
+### Batch Element Comparison
 
-1. Click the **"Compare"** button
-2. The diff results will show:
-   - **✅ Matched**: Properties that match between Figma and browser
-   - **❌ Mismatched**: Properties with different values (expected vs actual)
-   - **📋 Only in Figma**: Properties defined in Figma but not in browser
-   - **📋 Only in Browser**: Properties in browser but not in Figma
+1. Click the **"Batch"** button to enter batch mode.
+2. Enter a CSS selector that matches multiple elements (e.g., `.card`, `.list-item`).
+3. Click **"Select"** to extract styles from all matched elements.
+4. Paste Figma CSS blocks separated by `/* label */` comments:
+   ```css
+   /* card-header */
+   padding: 16px 24px;
+   font-size: 14px;
 
-### Step 5: Adjust Tolerance (Optional)
+   /* card-body */
+   padding: 24px;
+   font-size: 13px;
+   ```
+5. Click **"Compare"** to diff all elements at once.
+6. Review results in the accordion view -- sections with mismatches auto-expand.
 
-1. Click the **settings gear icon** ⚙️ to open tolerance settings
-2. Adjust tolerances for:
-   - **Spacing tolerance**: Acceptable pixel difference for margins/padding
-   - **Color tolerance**: Acceptable RGB channel difference
-   - **Border radius tolerance**: Acceptable pixel difference for border-radius
-3. Click "Compare" again to see updated results
+### Working with CSS Variables
 
-### Step 6: Export Results
+1. Paste Figma CSS containing `var(--name, fallback)` syntax.
+2. Variable chips appear in the results showing the variable name.
+3. Click a chip to open an inline editor and override the fallback value.
+4. Save your overrides as a named mapping via Settings > Variable Mappings > **Save Current**.
+5. Export mappings as JSON to share with your team.
 
-1. Click **"Copy Report"** to copy the full diff to your clipboard
-2. Share with your team or paste into PR descriptions
-3. Click **"Clear"** to reset and start a new comparison
+### Adjusting Tolerances
 
----
-
-## Style Properties Compared
-
-The extension extracts and compares the following CSS property groups:
-
-| Category | Properties |
-|----------|-----------|
-| **Spacing** | `margin-*`, `padding-*`, `gap`, `row-gap`, `column-gap` |
-| **Typography** | `font-family`, `font-size`, `font-weight`, `line-height`, `letter-spacing`, `text-align`, `text-transform`, `text-decoration`, `color` |
-| **Sizing** | `width`, `height`, `min-width`, `max-width`, `min-height`, `max-height` |
-| **Layout** | `display`, `flex-direction`, `align-items`, `justify-content`, `flex-wrap`, `position`, `top`, `right`, `bottom`, `left`, `z-index` |
-| **Visual** | `background-color`, `border`, `border-radius`, `box-shadow`, `opacity`, `overflow` |
+1. Click the **settings gear icon** to open tolerance settings.
+2. Adjust thresholds for spacing, color, and border-radius.
+3. Click "Compare" again to see updated results.
 
 ---
 
@@ -113,6 +178,7 @@ The extension extracts and compares the following CSS property groups:
 | Action | Shortcut |
 |--------|----------|
 | Cancel element picker | `Esc` |
+| Confirm CSS selector | `Enter` |
 | Open DevTools | `F12` or `Cmd+Option+I` (Mac) / `Ctrl+Shift+I` (Windows) |
 
 ---
@@ -139,6 +205,11 @@ The extension extracts and compares the following CSS property groups:
 - The parser supports standard CSS property-value pairs
 - Complex CSS (animations, transforms) may not be fully supported
 
+### Batch mode showing wrong matches
+- Ensure the number of `/* label */` blocks matches the number of elements the selector finds
+- Elements are matched to CSS blocks in DOM order
+- Check the batch status bar for the element count before comparing
+
 ---
 
 ## Development
@@ -153,17 +224,17 @@ chrome-extension/
 │   └── devtools.js            # Panel registration
 ├── panel/
 │   ├── panel.html             # Main UI (DevTools panel)
-│   ├── panel.js               # Panel logic & diff display
+│   ├── panel.js               # Panel logic, diff display, batch mode
 │   └── panel.css              # Panel styling
 ├── content/
-│   └── content.js             # Element picker & style extraction
+│   └── content.js             # Element picker, style extraction, batch extraction
 ├── background/
-│   └── service-worker.js      # Message relay
+│   └── service-worker.js      # Message relay between panel and content
 ├── lib/
-│   ├── style-extractor.js     # Extract computed styles
-│   ├── figma-parser.js        # Parse Figma CSS
+│   ├── style-extractor.js     # Property group definitions
+│   ├── figma-parser.js        # Parse Figma CSS, expand shorthands, multi-block parsing
 │   ├── normalizer.js          # Normalize values for comparison
-│   └── diff-engine.js         # Compare styles & generate report
+│   └── diff-engine.js         # Compare styles & classify severity
 └── icons/
     ├── icon-16.png
     ├── icon-48.png
@@ -193,6 +264,7 @@ chrome-extension/
 - No data is sent to external servers
 - Style information is only extracted from pages you actively inspect
 - The extension requires `activeTab` permission to access the current page's DOM
+- Variable mappings are stored locally in `chrome.storage`
 
 ---
 
@@ -201,11 +273,11 @@ chrome-extension/
 Contributions are welcome! Please feel free to submit issues or pull requests.
 
 ### Ideas for contributions:
-- Support for additional CSS properties
-- Export to different formats (JSON, Markdown)
-- Improved shadow DOM support
-- Dark/light theme toggle
-- Keyboard navigation improvements
+- Visual overlay comparison (screenshot overlay on live page)
+- Comparison history and regression tracking
+- Shadow DOM and web component support
+- Design token validation
+- Responsive breakpoint comparison
 
 ---
 
@@ -218,7 +290,3 @@ MIT
 ## Support
 
 If you encounter issues or have feature requests, please [open an issue](https://github.com/yourusername/ui-checker/issues).
-
----
-
-**Happy pixel-perfect developing! 🎨✨**
