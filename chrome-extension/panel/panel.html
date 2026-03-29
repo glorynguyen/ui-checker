@@ -22,14 +22,6 @@
   <div class="selector-row">
     <input type="text" id="selector-input" class="selector-input" placeholder="Paste CSS selector (e.g. #app > div.card > img)">
     <button id="selector-btn" class="btn btn-sm">Select</button>
-    <button id="batch-toggle" class="btn btn-sm" title="Toggle batch mode to compare multiple elements">Batch</button>
-  </div>
-
-  <!-- Batch mode info -->
-  <div id="batch-info" class="element-info hidden">
-    <strong>Batch Mode</strong> — enter a selector matching multiple elements, then paste one Figma CSS block per element
-    (separated by <code>/* label */</code> comments or blank lines).
-    <div id="batch-status" class="batch-status"></div>
   </div>
 
   <!-- Selected element info -->
@@ -88,6 +80,50 @@
     <button id="compare-btn" class="btn btn-primary" disabled>Compare</button>
   </div>
 
+  <!-- Visual Overlay (Phase 2) -->
+  <div id="overlay-section" class="overlay-section hidden">
+    <div class="overlay-header">
+      <h3>Visual Overlay</h3>
+      <div class="overlay-controls">
+        <button id="overlay-capture-btn" class="btn btn-sm" title="Capture element screenshot">Capture</button>
+        <div class="overlay-mode-group">
+          <button class="btn btn-sm overlay-mode-btn active" data-mode="onion">Onion</button>
+          <button class="btn btn-sm overlay-mode-btn" data-mode="side-by-side">Side by Side</button>
+          <button class="btn btn-sm overlay-mode-btn" data-mode="diff">Diff</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Figma image drop zone -->
+    <div id="figma-drop-zone" class="figma-drop-zone">
+      <p>Drop or paste Figma screenshot here</p>
+      <p class="text-muted">Or click to upload</p>
+      <input type="file" id="figma-image-input" accept="image/*" hidden>
+    </div>
+
+    <!-- Onion skin controls -->
+    <div id="overlay-slider-row" class="overlay-slider-row hidden">
+      <label>Opacity:</label>
+      <input type="range" id="overlay-opacity" min="0" max="100" value="50" class="overlay-slider">
+      <span id="overlay-opacity-val">50%</span>
+    </div>
+
+    <!-- Diff threshold controls -->
+    <div id="diff-threshold-row" class="overlay-slider-row hidden">
+      <label>Diff threshold:</label>
+      <input type="range" id="diff-threshold" min="0" max="50" value="10" class="overlay-slider">
+      <span id="diff-threshold-val">10</span>
+    </div>
+
+    <!-- Canvas display area -->
+    <div id="overlay-canvas-area" class="overlay-canvas-area hidden">
+      <div id="overlay-canvases" class="overlay-canvases">
+        <canvas id="overlay-canvas" class="overlay-canvas"></canvas>
+      </div>
+      <div id="overlay-match-info" class="overlay-match-info hidden"></div>
+    </div>
+  </div>
+
   <!-- Results (single mode) -->
   <div id="results-section" class="results-section hidden">
     <div id="results-summary" class="results-summary"></div>
@@ -98,21 +134,12 @@
     </div>
   </div>
 
-  <!-- Results (batch mode) -->
-  <div id="batch-results-section" class="results-section hidden">
-    <div id="batch-results-summary" class="results-summary"></div>
-    <div id="batch-results-list" class="batch-results-list"></div>
-    <div class="actions">
-      <button id="batch-copy-btn" class="btn">Copy Report</button>
-      <button id="batch-clear-btn" class="btn">Clear</button>
-    </div>
-  </div>
-
   <!-- Scripts -->
   <script src="../lib/style-extractor.js"></script>
   <script src="../lib/figma-parser.js"></script>
   <script src="../lib/normalizer.js"></script>
   <script src="../lib/diff-engine.js"></script>
+  <script src="../lib/pixel-diff.js"></script>
   <script src="panel.js"></script>
 </body>
 </html>

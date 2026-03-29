@@ -6,6 +6,7 @@
   let highlightEl = null;
   let tooltipEl = null;
   let lastTarget = null;
+  let selectedElement = null; // Persists after picker deactivates
 
   // Curated CSS properties to extract (same list used in style-extractor logic)
   const CURATED_PROPERTIES = [
@@ -131,6 +132,7 @@
       return;
     }
 
+    selectedElement = lastTarget;
     const data = extractStyles(lastTarget);
     chrome.runtime.sendMessage({ action: 'ELEMENT_SELECTED', data });
     deactivatePicker();
@@ -169,7 +171,7 @@
   }
 
   // Listen for messages from the service worker / panel
-  chrome.runtime.onMessage.addListener((msg) => {
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.action === 'START_PICKER') {
       activatePicker();
     } else if (msg.action === 'CANCEL_PICKER') {
@@ -177,33 +179,40 @@
     } else if (msg.action === 'QUERY_SELECTOR') {
       const el = document.querySelector(msg.selector);
       if (el) {
+        selectedElement = el;
         const data = extractStyles(el);
         chrome.runtime.sendMessage({ action: 'ELEMENT_SELECTED', data });
       } else {
         chrome.runtime.sendMessage({ action: 'SELECTOR_NOT_FOUND', selector: msg.selector });
       }
-    } else if (msg.action === 'BATCH_EXTRACT') {
-      const MAX_BATCH = 50;
-      let elements;
-      if (msg.mode === 'children') {
-        const parent = document.querySelector(msg.selector);
-        elements = parent ? Array.from(parent.children) : [];
-      } else {
-        elements = Array.from(document.querySelectorAll(msg.selector));
+    } else if (msg.action === 'GET_ELEMENT_RECT') {
+      // Return the bounding rect via sendResponse
+      console.log('[Content] GET_ELEMENT_RECT, selector:', msg.selector, 'selectedElement:', !!selectedElement, 'lastTarget:', !!lastTarget);
+      let target = selectedElement || lastTarget;
+      if (msg.selector) {
+        const queried = document.querySelector(msg.selector);
+        console.log('[Content] querySelector result:', !!queried, 'for selector:', msg.selector);
+        target = queried || target;
       }
-
-      if (elements.length === 0) {
-        chrome.runtime.sendMessage({ action: 'BATCH_EMPTY', selector: msg.selector });
-      } else {
-        const truncated = elements.length > MAX_BATCH;
-        const batch = elements.slice(0, MAX_BATCH).map(el => extractStyles(el));
-        chrome.runtime.sendMessage({
-          action: 'BATCH_EXTRACTED',
-          data: batch,
-          total: elements.length,
-          truncated
+      if (target) {
+        const rect = target.getBoundingClientRect();
+        console.log('[Content] Sending rect:', { viewportX: Math.round(rect.left), viewportY: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) }, 'dpr:', window.devicePixelRatio);
+        sendResponse({
+          rect: {
+            x: Math.round(rect.left + window.scrollX),
+            y: Math.round(rect.top + window.scrollY),
+            viewportX: Math.round(rect.left),
+            viewportY: Math.round(rect.top),
+            width: Math.round(rect.width),
+            height: Math.round(rect.height)
+          },
+          devicePixelRatio: window.devicePixelRatio || 1
         });
+      } else {
+        console.warn('[Content] No target element found for GET_ELEMENT_RECT');
+        sendResponse({ error: true });
       }
+      return true; // Keep message channel open for sendResponse
     }
   });
 })();

@@ -25,33 +25,25 @@
   const mappingSaveBtn = document.getElementById('mapping-save-btn');
   const mappingExportBtn = document.getElementById('mapping-export-btn');
   const mappingImportInput = document.getElementById('mapping-import-input');
-  const batchToggle = document.getElementById('batch-toggle');
-  const batchInfo = document.getElementById('batch-info');
-  const batchStatus = document.getElementById('batch-status');
-  const batchResultsSection = document.getElementById('batch-results-section');
-  const batchResultsSummary = document.getElementById('batch-results-summary');
-  const batchResultsList = document.getElementById('batch-results-list');
-  const batchCopyBtn = document.getElementById('batch-copy-btn');
-  const batchClearBtn = document.getElementById('batch-clear-btn');
 
   // --- State ---
   let extractedData = null; // { element, dimensions, styles }
   let lastDiffReport = null;
   let currentVarMap = {};    // property → { varName, fallback, original }
   let varOverrides = {};     // property → user-overridden value
-  let batchMode = false;
-  let batchData = null;      // array of { element, dimensions, styles }
-  let lastBatchReports = null;
 
   // --- Messaging ---
   const tabId = chrome.devtools.inspectedWindow.tabId;
   let port = null;
 
   function connectPort() {
+    console.log('[Panel] Connecting port...');
     port = chrome.runtime.connect({ name: 'figma-diff-panel' });
     port.postMessage({ action: 'INIT', tabId });
+    console.log('[Panel] Port connected, INIT sent for tabId:', tabId);
 
     port.onMessage.addListener((msg) => {
+      console.log('[Panel] Port message received:', msg.action);
       if (msg.action === 'ELEMENT_SELECTED') {
         onElementSelected(msg.data);
       } else if (msg.action === 'PICKER_CANCELLED') {
@@ -59,16 +51,15 @@
       } else if (msg.action === 'SELECTOR_NOT_FOUND') {
         pickStatus.textContent = `No element found for: ${msg.selector}`;
         pickStatus.classList.add('active');
-      } else if (msg.action === 'BATCH_EXTRACTED') {
-        onBatchExtracted(msg.data, msg.total, msg.truncated);
-      } else if (msg.action === 'BATCH_EMPTY') {
-        batchStatus.textContent = `No elements found for: ${msg.selector}`;
-        batchData = null;
-        updateCompareBtn();
+      } else if (msg.action === 'ELEMENT_CAPTURED') {
+        if (typeof onElementCaptured === 'function') onElementCaptured(msg);
+      } else if (msg.action === 'ELEMENT_CAPTURE_FAILED') {
+        if (typeof onElementCaptureFailed === 'function') onElementCaptureFailed(msg);
       }
     });
 
     port.onDisconnect.addListener(() => {
+      console.warn('[Panel] Port disconnected', chrome.runtime.lastError?.message);
       port = null;
     });
   }
@@ -76,8 +67,26 @@
   connectPort();
 
   function sendMessage(msg) {
-    if (!port) connectPort();
-    port.postMessage(msg);
+    // MV3 service workers go idle after ~30s. The port becomes a zombie —
+    // postMessage won't throw but the SW never receives it.
+    // For critical messages, always reconnect to guarantee a fresh port.
+    if (msg.action === 'CAPTURE_ELEMENT') {
+      console.log('[Panel] Reconnecting port for CAPTURE_ELEMENT');
+      try { if (port) port.disconnect(); } catch (_) {}
+      port = null;
+      connectPort();
+    } else if (!port) {
+      console.log('[Panel] Port is null, reconnecting before send');
+      connectPort();
+    }
+    try {
+      port.postMessage(msg);
+      console.log('[Panel] postMessage sent:', msg.action);
+    } catch (e) {
+      console.warn('[Panel] postMessage failed, reconnecting:', e.message);
+      connectPort();
+      port.postMessage(msg);
+    }
   }
 
   // --- Pick Element ---
@@ -93,15 +102,9 @@
     sendMessage({ action: 'QUERY_SELECTOR', selector });
   }
 
-  selectorBtn.addEventListener('click', () => {
-    if (batchMode) queryBatchSelector();
-    else queryBySelector();
-  });
+  selectorBtn.addEventListener('click', () => queryBySelector());
   selectorInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      if (batchMode) queryBatchSelector();
-      else queryBySelector();
-    }
+    if (e.key === 'Enter') queryBySelector();
   });
 
   function setPickerState(active) {
@@ -131,17 +134,17 @@
     extractedStyles.textContent = lines;
 
     updateCompareBtn();
+
+    // Show visual overlay section (Phase 2)
+    const os = document.getElementById('overlay-section');
+    if (os) os.classList.remove('hidden');
   }
 
   // --- Figma input ---
   figmaInput.addEventListener('input', updateCompareBtn);
 
   function updateCompareBtn() {
-    if (batchMode) {
-      compareBtn.disabled = !(batchData && figmaInput.value.trim());
-    } else {
-      compareBtn.disabled = !(extractedData && figmaInput.value.trim());
-    }
+    compareBtn.disabled = !(extractedData && figmaInput.value.trim());
   }
 
   // --- Settings ---
@@ -176,197 +179,6 @@
     }
   });
 
-  // --- Batch mode ---
-  batchToggle.addEventListener('click', () => {
-    batchMode = !batchMode;
-    batchToggle.classList.toggle('batch-active', batchMode);
-    batchInfo.classList.toggle('hidden', !batchMode);
-    // Update selector placeholder
-    selectorInput.placeholder = batchMode
-      ? 'Selector matching multiple elements (e.g. .card, ul > li)'
-      : 'Paste CSS selector (e.g. #app > div.card > img)';
-    // Update figma textarea placeholder
-    figmaInput.placeholder = batchMode
-      ? 'Paste CSS blocks separated by /* label */ comments or blank lines...'
-      : 'Paste CSS from Figma Dev Mode here...';
-    updateCompareBtn();
-  });
-
-  function queryBatchSelector() {
-    const selector = selectorInput.value.trim();
-    if (!selector) return;
-    sendMessage({ action: 'BATCH_EXTRACT', selector });
-    batchStatus.textContent = 'Extracting styles...';
-  }
-
-  function onBatchExtracted(data, total, truncated) {
-    batchData = data;
-    let statusText = `${data.length} elements extracted`;
-    if (truncated) {
-      statusText += ` (capped at ${data.length} of ${total})`;
-    }
-    batchStatus.textContent = statusText;
-
-    // Show extracted styles summary in the right panel
-    const lines = data.map((d, i) => `/* ${d.element} (${d.dimensions.width}x${d.dimensions.height}) */`).join('\n');
-    extractedStyles.textContent = lines;
-    elementInfo.classList.add('hidden');
-    updateCompareBtn();
-  }
-
-  function runBatchComparison() {
-    if (!batchData || !figmaInput.value.trim()) return;
-
-    const figmaBlocks = FigmaParser.parseMulti(figmaInput.value);
-    const tolerance = getTolerance();
-    const reports = [];
-    const count = Math.min(batchData.length, figmaBlocks.length);
-
-    for (let i = 0; i < count; i++) {
-      const el = batchData[i];
-      const block = figmaBlocks[i];
-
-      const figmaStyles = { ...block.styles };
-      // Apply any variable overrides
-      for (const [prop, val] of Object.entries(varOverrides)) {
-        if (prop in figmaStyles) figmaStyles[prop] = val;
-      }
-
-      const normalizedFigma = Normalizer.normalize(figmaStyles);
-      const normalizedBrowser = Normalizer.normalize(el.styles);
-      const report = DiffEngine.compare(normalizedFigma, normalizedBrowser, tolerance);
-
-      reports.push({
-        ...report,
-        element: el.element,
-        dimensions: el.dimensions,
-        label: block.label
-      });
-    }
-
-    lastBatchReports = reports;
-    renderBatchResults(reports, batchData.length, figmaBlocks.length);
-  }
-
-  function renderBatchResults(reports, totalElements, totalBlocks) {
-    batchResultsSection.classList.remove('hidden');
-    resultsSection.classList.add('hidden');
-
-    // Aggregate summary
-    let totalMatched = 0, totalMismatched = 0, totalMissing = 0, totalProps = 0;
-    for (const r of reports) {
-      totalMatched += r.summary.matched;
-      totalMismatched += r.summary.mismatched;
-      totalMissing += r.summary.missing;
-      totalProps += r.summary.total;
-    }
-
-    let summaryHtml = `<span class="stat">${reports.length} elements</span>`;
-    summaryHtml += `<span class="stat stat-matched">${totalMatched}/${totalProps} matched</span>`;
-    summaryHtml += `<span class="stat stat-mismatched">${totalMismatched} mismatched</span>`;
-    summaryHtml += `<span class="stat stat-missing">${totalMissing} missing</span>`;
-
-    if (totalElements !== totalBlocks) {
-      summaryHtml += `<span class="stat" style="color:var(--orange)">&#9888; ${totalElements} elements vs ${totalBlocks} CSS blocks</span>`;
-    }
-    batchResultsSummary.innerHTML = summaryHtml;
-
-    // Per-element accordion
-    batchResultsList.innerHTML = '';
-    for (const report of reports) {
-      const section = document.createElement('div');
-      section.className = 'batch-element-section';
-
-      const header = document.createElement('div');
-      header.className = 'batch-element-header';
-      const s = report.summary;
-      header.innerHTML = `
-        <span class="arrow">&#9654;</span>
-        <span class="batch-element-name">${escapeHtml(report.label || report.element)}</span>
-        <span class="batch-element-stats">
-          <span style="color:var(--green)">${s.matched}/${s.total}</span>
-          ${s.mismatched > 0 ? `<span style="color:var(--red)">${s.mismatched} diff</span>` : ''}
-          ${s.missing > 0 ? `<span style="color:var(--orange)">${s.missing} miss</span>` : ''}
-        </span>
-      `;
-
-      const content = document.createElement('div');
-      content.className = 'batch-element-content';
-
-      // Element details
-      const dimLine = document.createElement('div');
-      dimLine.className = 'element-info';
-      dimLine.style.marginBottom = '6px';
-      dimLine.innerHTML = `<strong>${escapeHtml(report.element)}</strong> (${report.dimensions.width} x ${report.dimensions.height})`;
-      content.appendChild(dimLine);
-
-      // Reuse existing result rendering for this element
-      const sorted = [...report.results].sort((a, b) => {
-        const statusOrder = { mismatch: 0, missing: 1, match: 2 };
-        const severityOrder = { major: 0, minor: 1, negligible: 2 };
-        const sa = statusOrder[a.status] ?? 3;
-        const sb = statusOrder[b.status] ?? 3;
-        if (sa !== sb) return sa - sb;
-        return (severityOrder[a.severity] ?? 3) - (severityOrder[b.severity] ?? 3);
-      });
-
-      const mismatches = sorted.filter(r => r.status === 'mismatch' || r.status === 'missing');
-      const matches = sorted.filter(r => r.status === 'match');
-
-      if (mismatches.length > 0) {
-        const grouped = groupByPropertyGroup(mismatches);
-        for (const [group, items] of Object.entries(grouped)) {
-          const groupEl = document.createElement('div');
-          groupEl.className = 'result-group';
-          groupEl.innerHTML = `<div class="result-group-header">${group}</div>`;
-          items.forEach(r => groupEl.appendChild(createResultRow(r)));
-          content.appendChild(groupEl);
-        }
-      }
-
-      if (matches.length > 0) {
-        const toggle = document.createElement('button');
-        toggle.className = 'matched-toggle';
-        toggle.innerHTML = `<span class="arrow">&#9654;</span> ${matches.length} matched`;
-        const matchContent = document.createElement('div');
-        matchContent.className = 'matched-content';
-
-        const grouped = groupByPropertyGroup(matches);
-        for (const [group, items] of Object.entries(grouped)) {
-          const groupEl = document.createElement('div');
-          groupEl.className = 'result-group';
-          groupEl.innerHTML = `<div class="result-group-header">${group}</div>`;
-          items.forEach(r => groupEl.appendChild(createResultRow(r)));
-          matchContent.appendChild(groupEl);
-        }
-
-        toggle.addEventListener('click', (e) => {
-          e.stopPropagation();
-          toggle.classList.toggle('open');
-          matchContent.classList.toggle('open');
-        });
-
-        content.appendChild(toggle);
-        content.appendChild(matchContent);
-      }
-
-      header.addEventListener('click', () => {
-        header.classList.toggle('open');
-        content.classList.toggle('open');
-      });
-
-      // Auto-open sections with mismatches
-      if (s.mismatched > 0 || s.missing > 0) {
-        header.classList.add('open');
-        content.classList.add('open');
-      }
-
-      section.appendChild(header);
-      section.appendChild(content);
-      batchResultsList.appendChild(section);
-    }
-  }
-
   // --- Compare ---
   function runComparison() {
     if (!extractedData || !figmaInput.value.trim()) return;
@@ -397,13 +209,7 @@
     renderResults(report);
   }
 
-  compareBtn.addEventListener('click', () => {
-    if (batchMode) {
-      runBatchComparison();
-    } else {
-      runComparison();
-    }
-  });
+  compareBtn.addEventListener('click', () => runComparison());
 
   // --- Render results ---
   function renderResults(report) {
@@ -638,54 +444,6 @@
     compareBtn.disabled = true;
   });
 
-  // --- Batch Clear ---
-  batchClearBtn.addEventListener('click', () => {
-    batchData = null;
-    lastBatchReports = null;
-    figmaInput.value = '';
-    extractedStyles.textContent = 'Pick an element to extract styles.';
-    batchStatus.textContent = '';
-    batchResultsSection.classList.add('hidden');
-    batchResultsSummary.innerHTML = '';
-    batchResultsList.innerHTML = '';
-    compareBtn.disabled = true;
-  });
-
-  // --- Batch Copy Report ---
-  batchCopyBtn.addEventListener('click', () => {
-    if (!lastBatchReports || lastBatchReports.length === 0) return;
-
-    let md = `## Batch Style Diff Report\n`;
-    md += `**Elements:** ${lastBatchReports.length} compared | **Date:** ${new Date().toISOString().slice(0, 10)}\n\n`;
-
-    // Summary table
-    md += `### Summary\n`;
-    md += `| Element | Matched | Mismatched | Missing |\n`;
-    md += `|---------|---------|------------|--------|\n`;
-    for (const r of lastBatchReports) {
-      md += `| \`${r.label || r.element}\` | ${r.summary.matched}/${r.summary.total} | ${r.summary.mismatched} | ${r.summary.missing} |\n`;
-    }
-    md += '\n';
-
-    // Per-element details
-    for (const r of lastBatchReports) {
-      const mismatches = r.results.filter(x => x.status === 'mismatch' || x.status === 'missing');
-      if (mismatches.length === 0) continue;
-      md += `### ${r.label || r.element} (${r.dimensions.width} x ${r.dimensions.height})\n`;
-      md += `| Property | Expected | Actual | Severity |\n`;
-      md += `|----------|----------|--------|----------|\n`;
-      for (const m of mismatches) {
-        md += `| ${m.property} | ${m.expected} | ${m.actual ?? 'n/a'} | ${m.severity} |\n`;
-      }
-      md += '\n';
-    }
-
-    navigator.clipboard.writeText(md).then(() => {
-      batchCopyBtn.textContent = 'Copied!';
-      setTimeout(() => { batchCopyBtn.textContent = 'Copy Report'; }, 1500);
-    });
-  });
-
   // --- Variable Mappings ---
   function getSavedMappings(cb) {
     chrome.storage.local.get(['savedMappings'], (result) => {
@@ -831,4 +589,271 @@
 
   // Load mappings list on startup
   refreshMappingsList();
+
+  // =====================================================
+  // Phase 2 — Visual Overlay Comparison
+  // =====================================================
+
+  const overlaySection = document.getElementById('overlay-section');
+  const overlayCaptureBtn = document.getElementById('overlay-capture-btn');
+  const figmaDropZone = document.getElementById('figma-drop-zone');
+  const figmaImageInput = document.getElementById('figma-image-input');
+  const overlaySliderRow = document.getElementById('overlay-slider-row');
+  const overlayOpacity = document.getElementById('overlay-opacity');
+  const overlayOpacityVal = document.getElementById('overlay-opacity-val');
+  const diffThresholdRow = document.getElementById('diff-threshold-row');
+  const diffThreshold = document.getElementById('diff-threshold');
+  const diffThresholdVal = document.getElementById('diff-threshold-val');
+  const overlayCanvasArea = document.getElementById('overlay-canvas-area');
+  const overlayCanvas = document.getElementById('overlay-canvas');
+  const overlayMatchInfo = document.getElementById('overlay-match-info');
+  const modeBtns = document.querySelectorAll('.overlay-mode-btn');
+
+  let overlayMode = 'onion'; // 'onion' | 'side-by-side' | 'diff'
+  let browserScreenshot = null; // data URL of cropped element screenshot
+  let figmaImage = null;        // data URL of uploaded Figma image
+  let elementRect = null;       // bounding rect from capture
+  let capturedDPR = 1;
+
+  // --- Capture element screenshot ---
+  overlayCaptureBtn.addEventListener('click', () => {
+    console.log('[Panel] Capture clicked, extractedData:', extractedData ? { element: extractedData.element, dimensions: extractedData.dimensions } : null);
+    if (!extractedData) {
+      overlayCaptureBtn.textContent = 'Pick element first';
+      setTimeout(() => { overlayCaptureBtn.textContent = 'Capture'; }, 1500);
+      return;
+    }
+    overlayCaptureBtn.disabled = true;
+    overlayCaptureBtn.textContent = 'Capturing...';
+    const selector = extractedData?.element || '';
+    console.log('[Panel] Sending CAPTURE_ELEMENT, selector:', selector);
+    sendMessage({ action: 'CAPTURE_ELEMENT', selector });
+  });
+
+  // Handle capture response (add to port listener)
+  function onElementCaptured(msg) {
+    console.log('[Panel] onElementCaptured, rect:', msg.rect, 'screenshot:', msg.screenshot ? 'yes (' + msg.screenshot.length + ' chars)' : 'no', 'dpr:', msg.devicePixelRatio);
+    overlayCaptureBtn.disabled = false;
+    overlayCaptureBtn.textContent = 'Capture';
+
+    if (!msg.screenshot || !msg.rect) { console.warn('[Panel] Missing screenshot or rect, aborting'); return; }
+
+    elementRect = msg.rect;
+    capturedDPR = msg.devicePixelRatio || 1;
+
+    // Crop the full-page screenshot to element bounds
+    const img = new Image();
+    img.onload = () => {
+      const cropX = msg.rect.viewportX * capturedDPR;
+      const cropY = msg.rect.viewportY * capturedDPR;
+      const cropW = msg.rect.width * capturedDPR;
+      const cropH = msg.rect.height * capturedDPR;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = msg.rect.width;
+      canvas.height = msg.rect.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, msg.rect.width, msg.rect.height);
+
+      browserScreenshot = canvas.toDataURL('image/png');
+      renderOverlay();
+    };
+    img.src = msg.screenshot;
+  }
+
+  function onElementCaptureFailed(msg) {
+    console.error('[Panel] onElementCaptureFailed', msg);
+    overlayCaptureBtn.disabled = false;
+    overlayCaptureBtn.textContent = 'Failed — retry';
+    setTimeout(() => { overlayCaptureBtn.textContent = 'Capture'; }, 2000);
+  }
+
+  // --- Figma image upload ---
+  figmaDropZone.addEventListener('click', () => figmaImageInput.click());
+
+  figmaImageInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) loadFigmaImage(file);
+    e.target.value = '';
+  });
+
+  figmaDropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    figmaDropZone.classList.add('drag-over');
+  });
+
+  figmaDropZone.addEventListener('dragleave', () => {
+    figmaDropZone.classList.remove('drag-over');
+  });
+
+  figmaDropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    figmaDropZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) loadFigmaImage(file);
+  });
+
+  // Support paste anywhere in the panel
+  document.addEventListener('paste', (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        loadFigmaImage(item.getAsFile());
+        return;
+      }
+    }
+  });
+
+  function loadFigmaImage(file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      figmaImage = reader.result;
+      // Show preview thumb in drop zone
+      figmaDropZone.classList.add('has-image');
+      figmaDropZone.innerHTML = `<img src="${figmaImage}" class="preview-thumb" alt="Figma design">`;
+      renderOverlay();
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // --- View mode switching ---
+  modeBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      modeBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      overlayMode = btn.dataset.mode;
+      updateSliderVisibility();
+      renderOverlay();
+    });
+  });
+
+  function updateSliderVisibility() {
+    overlaySliderRow.classList.toggle('hidden', overlayMode !== 'onion');
+    diffThresholdRow.classList.toggle('hidden', overlayMode !== 'diff');
+  }
+
+  // --- Opacity slider ---
+  overlayOpacity.addEventListener('input', () => {
+    overlayOpacityVal.textContent = overlayOpacity.value + '%';
+    renderOverlay();
+  });
+
+  // --- Diff threshold ---
+  diffThreshold.addEventListener('input', () => {
+    diffThresholdVal.textContent = diffThreshold.value;
+    renderOverlay();
+  });
+
+  // --- Render overlay ---
+  async function renderOverlay() {
+    if (!browserScreenshot && !figmaImage) {
+      overlayCanvasArea.classList.add('hidden');
+      return;
+    }
+
+    overlayCanvasArea.classList.remove('hidden');
+    overlayMatchInfo.classList.add('hidden');
+
+    const ctx = overlayCanvas.getContext('2d');
+
+    // Load available images
+    const browserImg = browserScreenshot ? await loadImg(browserScreenshot) : null;
+    const figmaImg = figmaImage ? await loadImg(figmaImage) : null;
+
+    // Determine canvas size
+    const w = browserImg ? browserImg.width : figmaImg.width;
+    const h = browserImg ? browserImg.height : figmaImg.height;
+
+    if (overlayMode === 'side-by-side') {
+      const totalW = (browserImg ? w : 0) + (figmaImg ? figmaImg.width : 0) + (browserImg && figmaImg ? 8 : 0);
+      const maxH = Math.max(h, figmaImg ? figmaImg.height : 0);
+      overlayCanvas.width = totalW;
+      overlayCanvas.height = maxH;
+      ctx.clearRect(0, 0, totalW, maxH);
+
+      let x = 0;
+      if (browserImg) {
+        ctx.drawImage(browserImg, 0, 0);
+        x = browserImg.width + 8;
+      }
+      if (figmaImg) {
+        ctx.drawImage(figmaImg, x, 0, figmaImg.width, figmaImg.height);
+      }
+    } else if (overlayMode === 'onion') {
+      overlayCanvas.width = w;
+      overlayCanvas.height = h;
+      ctx.clearRect(0, 0, w, h);
+
+      if (browserImg) ctx.drawImage(browserImg, 0, 0);
+
+      if (figmaImg) {
+        const opacity = parseInt(overlayOpacity.value) / 100;
+        ctx.globalAlpha = opacity;
+        ctx.drawImage(figmaImg, 0, 0, w, h);
+        ctx.globalAlpha = 1;
+      }
+    } else if (overlayMode === 'diff') {
+      overlayCanvas.width = w;
+      overlayCanvas.height = h;
+      ctx.clearRect(0, 0, w, h);
+
+      if (browserImg && figmaImg) {
+        const threshold = parseInt(diffThreshold.value) || 10;
+        const imgDataA = getImageData(browserImg, w, h);
+        const imgDataB = getImageData(figmaImg, w, h);
+        const result = PixelDiff.compare(imgDataA, imgDataB, { threshold });
+
+        ctx.putImageData(result.diffImageData, 0, 0);
+
+        // Show match info
+        overlayMatchInfo.classList.remove('hidden');
+        overlayMatchInfo.textContent = `${result.matchPercent}% match (${result.diffCount.toLocaleString()} / ${result.totalPixels.toLocaleString()} pixels differ)`;
+        if (result.matchPercent >= 98) {
+          overlayMatchInfo.className = 'overlay-match-info good';
+        } else if (result.matchPercent >= 90) {
+          overlayMatchInfo.className = 'overlay-match-info warn';
+        } else {
+          overlayMatchInfo.className = 'overlay-match-info bad';
+        }
+      } else if (browserImg) {
+        ctx.drawImage(browserImg, 0, 0);
+      } else if (figmaImg) {
+        ctx.drawImage(figmaImg, 0, 0, w, h);
+      }
+    }
+  }
+
+  function loadImg(src) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+  }
+
+  function getImageData(img, w, h) {
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0, w, h);
+    return ctx.getImageData(0, 0, w, h);
+  }
+
+  // --- Reset overlay state on clear ---
+  clearBtn.addEventListener('click', () => {
+    browserScreenshot = null;
+    figmaImage = null;
+    elementRect = null;
+    overlaySection.classList.add('hidden');
+    overlayCanvasArea.classList.add('hidden');
+    overlayMatchInfo.classList.add('hidden');
+    // Reset drop zone
+    figmaDropZone.classList.remove('has-image');
+    figmaDropZone.innerHTML = '<p>Drop or paste Figma screenshot here</p><p class="text-muted">Or click to upload</p>';
+  });
+
 })();
