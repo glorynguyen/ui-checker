@@ -198,6 +198,27 @@ body {
   padding-top: 8px;
 }
 
+.results-filter-row {
+  margin-bottom: 8px;
+}
+.results-filter {
+  width: 100%;
+  padding: 5px 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 11px;
+  font-family: var(--font-sans);
+  outline: none;
+}
+.results-filter:focus {
+  border-color: var(--accent);
+}
+.results-filter::placeholder {
+  color: var(--text-muted);
+}
+
 .results-summary {
   display: flex;
   gap: 16px;

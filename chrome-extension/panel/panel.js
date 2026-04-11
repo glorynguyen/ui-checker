@@ -25,6 +25,7 @@
   const mappingSaveBtn = document.getElementById('mapping-save-btn');
   const mappingExportBtn = document.getElementById('mapping-export-btn');
   const mappingImportInput = document.getElementById('mapping-import-input');
+  const resultsFilter = document.getElementById('results-filter');
 
   // --- State ---
   let extractedData = null; // { element, dimensions, styles }
@@ -211,6 +212,11 @@
 
   compareBtn.addEventListener('click', () => runComparison());
 
+  // --- Filter results ---
+  resultsFilter.addEventListener('input', () => {
+    if (lastDiffReport) renderResults(lastDiffReport);
+  });
+
   // --- Render results ---
   function renderResults(report) {
     resultsSection.classList.remove('hidden');
@@ -239,9 +245,15 @@
       return sevA - sevB;
     });
 
+    // Apply filter
+    const filterText = resultsFilter.value.trim().toLowerCase();
+    const filtered = filterText
+      ? sorted.filter(r => r.property.toLowerCase().includes(filterText))
+      : sorted;
+
     // Group by property group
-    const mismatches = sorted.filter(r => r.status === 'mismatch' || r.status === 'missing');
-    const matches = sorted.filter(r => r.status === 'match');
+    const mismatches = filtered.filter(r => r.status === 'mismatch' || r.status === 'missing');
+    const matches = filtered.filter(r => r.status === 'match');
 
     // Render mismatches by group
     if (mismatches.length > 0) {
@@ -441,6 +453,7 @@
     resultsSection.classList.add('hidden');
     resultsSummary.innerHTML = '';
     resultsList.innerHTML = '';
+    resultsFilter.value = '';
     compareBtn.disabled = true;
   });
 
