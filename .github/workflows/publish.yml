@@ -1,0 +1,27 @@
+name: Publish Chrome Extension
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Zip Extension
+        run: |
+          cd chrome-extension
+          zip -r ../extension.zip .
+          cd ..
+
+      - name: Publish to Chrome Web Store
+        uses: puzzlers-labs/chrome-webstore-publish@v1
+        with:
+          extension_id: ${{ secrets.EXTENSION_ID }}
+          zip_file_path: ./extension.zip
+          client_id: ${{ secrets.CLIENT_ID }}
+          client_secret: ${{ secrets.CLIENT_SECRET }}
+          refresh_token: ${{ secrets.REFRESH_TOKEN }}

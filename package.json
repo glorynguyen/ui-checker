@@ -1,0 +1,13 @@
+{
+  "name": "figma-css-diff",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Compare rendered browser styles against Figma Dev Mode CSS specs to catch spacing, typography, and color discrepancies.",
+  "scripts": {
+    "release": "semantic-release"
+  },
+  "devDependencies": {
+    "semantic-release": "^24.0.0",
+    "semantic-release-chrome": "^3.0.0"
+  }
+}
