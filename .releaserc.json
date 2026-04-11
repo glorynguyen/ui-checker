@@ -6,6 +6,7 @@
     [
       "semantic-release-chrome",
       {
+        "extensionId": "khbnahljdhbiafecmjbojhpocmehhbjc",
         "asset": "extension.zip",
         "distFolder": "chrome-extension",
         "manifestPath": "chrome-extension/manifest.json"

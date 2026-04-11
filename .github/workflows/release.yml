@@ -28,4 +28,7 @@ jobs:
       - name: Run semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GOOGLE_CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.REFRESH_TOKEN }}
         run: npx semantic-release
