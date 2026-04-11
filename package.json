@@ -7,6 +7,8 @@
     "release": "semantic-release"
   },
   "devDependencies": {
+    "@semantic-release/git": "^10.0.0",
+    "@semantic-release/github": "^11.0.0",
     "semantic-release": "^24.0.0",
     "semantic-release-chrome": "^3.0.0"
   }
