@@ -8,114 +8,148 @@
 <body>
   <!-- Header -->
   <header class="header">
-    <button id="pick-btn" class="btn btn-primary">Pick Element</button>
+    <div class="logo-section">
+      <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+      </svg>
+      <span class="logo-text">UI CHECKER</span>
+    </div>
+    <button id="pick-btn" class="btn btn-primary">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"></circle>
+        <path d="M12 8v8M8 12h8"></path>
+      </svg>
+      Pick Element
+    </button>
     <span id="pick-status" class="pick-status"></span>
     <button id="settings-btn" class="btn btn-icon" title="Settings">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-        <path d="M8 4.754a3.246 3.246 0 100 6.492 3.246 3.246 0 000-6.492zM5.754 8a2.246 2.246 0 114.492 0 2.246 2.246 0 01-4.492 0z"/>
-        <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 01-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 01-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 01.52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 011.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 011.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 01.52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 01-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 01-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 002.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 001.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 00-1.115 2.693l.16.291c.415.764-.421 1.6-1.185 1.184l-.292-.159a1.873 1.873 0 00-2.692 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 00-2.693-1.115l-.291.16c-.764.415-1.6-.421-1.184-1.185l.159-.292A1.873 1.873 0 001.945 8.93l-.318-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 003.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 002.692-1.116l.094-.318z"/>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"></path>
       </svg>
     </button>
   </header>
 
   <!-- Selector input -->
   <div class="selector-row">
-    <input type="text" id="selector-input" class="selector-input" placeholder="Paste CSS selector (e.g. #app > div.card > img)">
-    <button id="selector-btn" class="btn btn-sm">Select</button>
+    <input type="text" id="selector-input" class="input-field selector-input" placeholder="Paste CSS selector (e.g. #app > .card)">
+    <button id="selector-btn" class="btn">Select</button>
   </div>
 
   <!-- Selected element info -->
-  <div id="element-info" class="element-info hidden">
-    Selected: <strong id="element-name"></strong> (<span id="element-dims"></span>)
+  <div id="element-info" class="section-card element-info hidden">
+    Selected: <strong id="element-name"></strong>
+    <span class="text-muted" style="margin-left:auto" id="element-dims"></span>
   </div>
 
   <!-- Settings panel (collapsible) -->
-  <div id="settings-panel" class="settings-panel hidden">
-    <h3>Tolerance Settings</h3>
+  <div id="settings-panel" class="section-card settings-panel hidden">
+    <div class="section-title">Tolerance Settings</div>
     <div class="setting-row">
-      <label>Spacing tolerance (px):</label>
-      <input type="number" id="tol-spacing" value="2" min="0" max="20">
+      <label>Spacing tolerance (px)</label>
+      <input type="number" id="tol-spacing" class="input-field" value="2" min="0" max="20">
     </div>
     <div class="setting-row">
-      <label>Color tolerance (per channel):</label>
-      <input type="number" id="tol-color" value="5" min="0" max="50">
+      <label>Color tolerance (channel)</label>
+      <input type="number" id="tol-color" class="input-field" value="5" min="0" max="50">
     </div>
     <div class="setting-row">
-      <label>Border radius tolerance (px):</label>
-      <input type="number" id="tol-radius" value="2" min="0" max="10">
+      <label>Border radius tolerance (px)</label>
+      <input type="number" id="tol-radius" class="input-field" value="2" min="0" max="10">
     </div>
 
-    <h3 style="margin-top:12px">Variable Mappings</h3>
-    <div class="mapping-controls">
-      <select id="mapping-select">
-        <option value="">-- No saved mappings --</option>
-      </select>
-      <button id="mapping-load-btn" class="btn btn-sm" disabled>Load</button>
-      <button id="mapping-delete-btn" class="btn btn-sm" disabled>Del</button>
+    <div class="config-group">
+      <div class="section-title">Figma Connection</div>
+
+      <div class="setting-row" style="margin-top:8px;">
+        <input type="text" id="figma-file-key" class="input-field" placeholder="Figma File Key" style="flex:1;">
+      </div>
+      <div class="setting-row" style="margin-top:8px;">
+        <input type="password" id="mcp-token" class="input-field" placeholder="Personal Access Token" style="flex:1;">
+      </div>
+      <div class="setting-row" style="margin-top:8px;">
+        <button id="mcp-connect-btn" class="btn btn-sm btn-primary">Connect</button>
+        <span id="mcp-status" class="status-badge">Disconnected</span>
+      </div>
+      <div class="setting-row" style="margin-top:12px;">
+        <input type="text" id="mcp-node-id" class="input-field" placeholder="Figma Node ID / URL" style="flex:1;">
+        <button id="mcp-sync-btn" class="btn btn-sm btn-primary" title="Sync from open Figma tab">Sync</button>
+        <button id="mcp-fetch-btn" class="btn btn-sm">Fetch</button>
+      </div>
+      <div class="config-hint">
+        Tip: Paste a Figma layer URL or use <b>Sync</b> to auto-detect the Node ID from an active Figma browser tab.
+      </div>
     </div>
-    <div class="mapping-controls">
-      <button id="mapping-save-btn" class="btn btn-sm">Save Current</button>
-      <button id="mapping-export-btn" class="btn btn-sm" disabled>Export</button>
-      <label class="btn btn-sm mapping-import-label">
-        Import
-        <input type="file" id="mapping-import-input" accept=".json" hidden>
-      </label>
+
+    <div class="config-group">
+      <div class="section-title">Variable Mappings</div>
+      <div class="mapping-controls">
+        <select id="mapping-select" class="input-field">
+          <option value="">-- No saved mappings --</option>
+        </select>
+        <button id="mapping-load-btn" class="btn btn-xs" disabled>Load</button>
+        <button id="mapping-delete-btn" class="btn btn-xs" disabled>Del</button>
+      </div>
+      <div class="mapping-controls">
+        <button id="mapping-save-btn" class="btn btn-xs">Save Current</button>
+        <button id="mapping-export-btn" class="btn btn-xs" disabled>Export</button>
+        <label class="btn btn-xs mapping-import-label">
+          Import
+          <input type="file" id="mapping-import-input" accept=".json" hidden>
+        </label>
+      </div>
     </div>
   </div>
 
   <!-- Side-by-side panels -->
   <div class="panels">
     <div class="panel-section">
-      <h3>Figma CSS (paste)</h3>
-      <textarea id="figma-input" placeholder="Paste CSS from Figma Dev Mode here..."></textarea>
+      <div class="section-title">Figma Spec</div>
+      <textarea id="figma-input" placeholder="Paste CSS or fetch from Figma..."></textarea>
     </div>
     <div class="panel-section">
-      <h3>Extracted Styles (auto)</h3>
+      <div class="section-title">Live Component</div>
       <pre id="extracted-styles" class="styles-display">Pick an element to extract styles.</pre>
     </div>
   </div>
 
   <!-- Compare button -->
   <div class="actions">
-    <button id="compare-btn" class="btn btn-primary" disabled>Compare</button>
+    <button id="compare-btn" class="btn btn-primary" style="flex:1" disabled>Run Comparison</button>
   </div>
 
-  <!-- Visual Overlay (Phase 2) -->
+  <!-- Visual Overlay -->
   <div id="overlay-section" class="overlay-section hidden">
     <div class="overlay-header">
-      <h3>Visual Overlay</h3>
+      <div class="section-title" style="margin:0">Visual Overlay</div>
       <div class="overlay-controls">
-        <button id="overlay-capture-btn" class="btn btn-sm" title="Capture element screenshot">Capture</button>
+        <button id="overlay-capture-btn" class="btn btn-sm">Capture</button>
         <div class="overlay-mode-group">
           <button class="btn btn-sm overlay-mode-btn active" data-mode="onion">Onion</button>
-          <button class="btn btn-sm overlay-mode-btn" data-mode="side-by-side">Side by Side</button>
+          <button class="btn btn-sm overlay-mode-btn" data-mode="side-by-side">Side</button>
           <button class="btn btn-sm overlay-mode-btn" data-mode="diff">Diff</button>
         </div>
       </div>
     </div>
 
-    <!-- Figma image drop zone -->
     <div id="figma-drop-zone" class="figma-drop-zone">
-      <p>Drop or paste Figma screenshot here</p>
+      <p>Drop or paste Figma design</p>
       <p class="text-muted">Or click to upload</p>
       <input type="file" id="figma-image-input" accept="image/*" hidden>
     </div>
 
-    <!-- Onion skin controls -->
     <div id="overlay-slider-row" class="overlay-slider-row hidden">
-      <label>Opacity:</label>
+      <label>Opacity</label>
       <input type="range" id="overlay-opacity" min="0" max="100" value="50" class="overlay-slider">
       <span id="overlay-opacity-val">50%</span>
     </div>
 
-    <!-- Diff threshold controls -->
     <div id="diff-threshold-row" class="overlay-slider-row hidden">
-      <label>Diff threshold:</label>
+      <label>Sensitivity</label>
       <input type="range" id="diff-threshold" min="0" max="50" value="10" class="overlay-slider">
       <span id="diff-threshold-val">10</span>
     </div>
 
-    <!-- Canvas display area -->
     <div id="overlay-canvas-area" class="overlay-canvas-area hidden">
       <div id="overlay-canvases" class="overlay-canvases">
         <canvas id="overlay-canvas" class="overlay-canvas"></canvas>
@@ -124,16 +158,18 @@
     </div>
   </div>
 
-  <!-- Results (single mode) -->
+  <!-- Results -->
   <div id="results-section" class="results-section hidden">
-    <div id="results-summary" class="results-summary"></div>
+    <div id="results-summary" class="results-summary">
+      <!-- Injected by JS -->
+    </div>
     <div class="results-filter-row">
-      <input type="text" id="results-filter" class="results-filter" placeholder="Filter properties...">
+      <input type="text" id="results-filter" class="input-field results-filter" placeholder="Search properties...">
     </div>
     <div id="results-list" class="results-list"></div>
-    <div class="actions">
-      <button id="copy-btn" class="btn">Copy Report</button>
-      <button id="clear-btn" class="btn">Clear</button>
+    <div class="actions" style="margin-top:16px">
+      <button id="copy-btn" class="btn" style="flex:1">Copy Report</button>
+      <button id="clear-btn" class="btn">Reset</button>
     </div>
   </div>
 

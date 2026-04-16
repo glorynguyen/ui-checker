@@ -33,61 +33,238 @@
   let currentVarMap = {};    // property → { varName, fallback, original }
   let varOverrides = {};     // property → user-overridden value
 
+
+
   // --- Messaging ---
   const tabId = chrome.devtools.inspectedWindow.tabId;
   let port = null;
 
   function connectPort() {
-    console.log('[Panel] Connecting port...');
-    port = chrome.runtime.connect({ name: 'figma-diff-panel' });
-    port.postMessage({ action: 'INIT', tabId });
-    console.log('[Panel] Port connected, INIT sent for tabId:', tabId);
-
-    port.onMessage.addListener((msg) => {
+    try {
+      port = chrome.runtime.connect({ name: 'panel' });
+      port.postMessage({ action: 'INIT', tabId });
+    } catch (e) {
+      if (checkContext(e)) return;
+      console.error('[Panel] connectPort failed:', e);
+    }
+    if (port) {
+      port.onMessage.addListener((msg) => {
       console.log('[Panel] Port message received:', msg.action);
+      
+      // New: Handle MCP responses
+      const statusEl = document.getElementById('mcp-status');
+      if (msg.action === 'MCP_CONNECTED') {
+        statusEl.textContent = 'Connected';
+        statusEl.className = 'status-badge connected';
+      } else if (msg.action === 'MCP_CONNECTION_FAILED') {
+        statusEl.textContent = msg.error || 'Connection failed';
+        statusEl.className = 'status-badge error';
+      } else if (msg.action === 'MCP_NODE_FETCH_FAILED') {
+        alert('Figma Fetch Error: ' + msg.error);
+        mcpFetchBtn.disabled = false;
+        mcpFetchBtn.textContent = 'Fetch';
+      } else if (msg.action === 'MCP_NODE_DATA') {
+        console.log('[Panel] Received MCP Node Data:', msg.data);
+        figmaInput.value = JSON.stringify(msg.data, null, 2);
+        mcpFetchBtn.disabled = false;
+        mcpFetchBtn.textContent = 'Fetch';
+        updateCompareBtn();
+      } else if (msg.action === 'MCP_IMAGE_DATA') {
+        console.log('[Panel] Received MCP Image URL:', msg.imageUrl);
+        loadFigmaImageUrl(msg.imageUrl);
+      } else if (msg.action === 'MCP_IMAGE_FETCH_FAILED') {
+        console.warn('[Panel] Figma visual fetch failed:', msg.error);
+        // Silently fail or show a subtle hint that visual overlay won't auto-load
+      } else if (msg.action === 'FIGMA_TAB_SYNCED') {
+        if (msg.url) {
+          const parsed = parseFigmaUrl(msg.url);
+          if (parsed) {
+            if (parsed.fileKey) {
+              mcpFileKeyInput.value = parsed.fileKey;
+              // Save config
+              chrome.storage.local.get(['figmaConfig'], (res) => {
+                const newConfig = { ...(res.figmaConfig || {}), fileKey: parsed.fileKey };
+                chrome.storage.local.set({ figmaConfig: newConfig });
+              });
+            }
+            if (parsed.nodeId) {
+              mcpNodeIdInput.value = parsed.nodeId;
+            }
+            console.log('[Panel] Synced from Figma tab:', parsed);
+          }
+        }
+      } else if (msg.action === 'FIGMA_TAB_SYNC_FAILED') {
+        alert('Figma Tab Sync Error: ' + msg.error);
+      } else if (msg.action === 'ELEMENT_CAPTURED') {
+        onElementCaptured(msg);
+      } else if (msg.action === 'ELEMENT_CAPTURE_FAILED') {
+        onElementCaptureFailed(msg);
+      }
+
       if (msg.action === 'ELEMENT_SELECTED') {
         onElementSelected(msg.data);
-      } else if (msg.action === 'PICKER_CANCELLED') {
-        setPickerState(false);
-      } else if (msg.action === 'SELECTOR_NOT_FOUND') {
-        pickStatus.textContent = `No element found for: ${msg.selector}`;
-        pickStatus.classList.add('active');
-      } else if (msg.action === 'ELEMENT_CAPTURED') {
-        if (typeof onElementCaptured === 'function') onElementCaptured(msg);
-      } else if (msg.action === 'ELEMENT_CAPTURE_FAILED') {
-        if (typeof onElementCaptureFailed === 'function') onElementCaptureFailed(msg);
-      }
+      } 
+
     });
 
     port.onDisconnect.addListener(() => {
-      console.warn('[Panel] Port disconnected', chrome.runtime.lastError?.message);
+      console.log('[Panel] Port disconnected');
       port = null;
     });
+    }
+  }
+
+  // Figma API connection
+  function connectToFigma(token) {
+    sendMessage({ action: 'FIGMA_CONNECT', token });
+  }
+
+  function parseFigmaUrl(url) {
+    try {
+      const u = new URL(url);
+      const pathParts = u.pathname.split('/');
+      // /design/:key/:title or /file/:key/:title
+      const keyIdx = pathParts.findIndex(p => p === 'design' || p === 'file') + 1;
+      const fileKey = pathParts[keyIdx];
+      const nodeId = u.searchParams.get('node-id');
+      return { fileKey, nodeId };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function fetchFigmaNode(inputId) {
+    let nodeId = inputId;
+    let fileKey = mcpFileKeyInput.value.trim();
+
+    // Check if input is a URL
+    if (nodeId.includes('figma.com')) {
+      const parsed = parseFigmaUrl(nodeId);
+      if (parsed) {
+        if (parsed.fileKey) {
+          fileKey = parsed.fileKey;
+          mcpFileKeyInput.value = fileKey;
+          // Auto-save key if parsed from URL
+          if (chrome.storage) {
+            chrome.storage.local.get(['figmaConfig'], (res) => {
+                const newConfig = { ...(res.figmaConfig || {}), fileKey };
+                chrome.storage.local.set({ figmaConfig: newConfig });
+            });
+          }
+        }
+        if (parsed.nodeId) {
+          nodeId = parsed.nodeId;
+          mcpNodeIdInput.value = nodeId;
+        }
+      }
+    }
+
+    if (!fileKey) {
+        alert('Please enter a Figma File Key in settings or paste a full Figma URL.');
+        return;
+    }
+    sendMessage({ action: 'MCP_GET_NODE', nodeId, fileKey });
+    sendMessage({ action: 'MCP_GET_IMAGE', nodeId, fileKey });
+  }
+
+  function loadFigmaImageUrl(url) {
+    figmaImage = url;
+    // Show preview thumb in drop zone
+    figmaDropZone.classList.add('has-image');
+    figmaDropZone.textContent = '';
+    const img = document.createElement('img');
+    img.src = figmaImage;
+    img.className = 'preview-thumb';
+    img.alt = 'Figma design';
+    figmaDropZone.appendChild(img);
+    
+    // Show visual overlay section
+    const os = document.getElementById('overlay-section');
+    if (os) os.classList.remove('hidden');
+    
+    renderOverlay();
   }
 
   connectPort();
+  
 
   function sendMessage(msg) {
-    // MV3 service workers go idle after ~30s. The port becomes a zombie —
-    // postMessage won't throw but the SW never receives it.
-    // For critical messages, always reconnect to guarantee a fresh port.
-    if (msg.action === 'CAPTURE_ELEMENT') {
-      console.log('[Panel] Reconnecting port for CAPTURE_ELEMENT');
-      try { if (port) port.disconnect(); } catch (_) {}
-      port = null;
-      connectPort();
-    } else if (!port) {
+    // MV3 service workers go idle after ~30s. Reconnect if null or disconnected.
+    if (!port) {
       console.log('[Panel] Port is null, reconnecting before send');
       connectPort();
     }
+    
     try {
       port.postMessage(msg);
       console.log('[Panel] postMessage sent:', msg.action);
     } catch (e) {
+      if (checkContext(e)) return;
       console.warn('[Panel] postMessage failed, reconnecting:', e.message);
-      connectPort();
-      port.postMessage(msg);
+      try {
+          connectPort();
+          port.postMessage(msg);
+      } catch (e2) {
+          console.error('[Panel] Critical port failure:', e2);
+      }
     }
+  }
+
+  function checkContext(e) {
+    if (e.message && e.message.includes('context invalidated')) {
+      console.error('[Panel] Extension context invalidated. Please reload the extension and DevTools.');
+      alert('Extension context invalidated. This usually happens after an extension update. Please reload the extension and the DevTools panel.');
+      return true;
+    }
+    return false;
+  }
+
+  // --- Figma API Configuration ---
+  const mcpConnectBtn = document.getElementById('mcp-connect-btn');
+  const mcpFetchBtn = document.getElementById('mcp-fetch-btn');
+  const mcpSyncBtn = document.getElementById('mcp-sync-btn');
+  const mcpTokenInput = document.getElementById('mcp-token');
+  const mcpFileKeyInput = document.getElementById('figma-file-key');
+  const mcpNodeIdInput = document.getElementById('mcp-node-id');
+
+  mcpConnectBtn.addEventListener('click', () => {
+    const token = mcpTokenInput.value.trim();
+    const fileKey = mcpFileKeyInput.value.trim();
+    if (token) {
+        connectToFigma(token);
+        // Save config
+        if (chrome.storage) {
+            chrome.storage.local.set({ figmaConfig: { token, fileKey } });
+        }
+    }
+  });
+
+  mcpSyncBtn.addEventListener('click', () => {
+    sendMessage({ action: 'SYNC_FIGMA_TAB' });
+  });
+
+  mcpFetchBtn.addEventListener('click', () => {
+    const nodeId = mcpNodeIdInput.value.trim();
+    if (nodeId) {
+        mcpFetchBtn.disabled = true;
+        mcpFetchBtn.textContent = 'Fetching...';
+        fetchFigmaNode(nodeId);
+    }
+  });
+
+  // Load saved Figma config
+  if (chrome.storage) {
+    chrome.storage.local.get(['figmaConfig'], (result) => {
+      const config = result.figmaConfig || {};
+
+      if (mcpTokenInput) mcpTokenInput.value = config.token || '';
+      if (mcpFileKeyInput) mcpFileKeyInput.value = config.fileKey || '';
+
+      // Auto-connect if token exists
+      if (config.token) {
+          connectToFigma(config.token);
+      }
+    });
   }
 
   // --- Pick Element ---
@@ -128,6 +305,12 @@
     elementName.textContent = data.element;
     elementDims.textContent = `${data.dimensions.width} x ${data.dimensions.height}`;
 
+    // Auto-fetch if Figma ID exists
+    if (data.figmaId) {
+        document.getElementById('mcp-node-id').value = data.figmaId;
+        fetchFigmaNode(data.figmaId);
+    }
+
     // Display extracted styles
     const lines = Object.entries(data.styles)
       .map(([k, v]) => `${k}: ${v};`)
@@ -138,7 +321,12 @@
 
     // Show visual overlay section (Phase 2)
     const os = document.getElementById('overlay-section');
-    if (os) os.classList.remove('hidden');
+    if (os) {
+        os.classList.remove('hidden');
+        // Auto-capture the element for visual overlay
+        console.log('[Panel] Auto-capturing element for visual overlay');
+        sendMessage({ action: 'CAPTURE_ELEMENT', selector: data.element });
+    }
   }
 
   // --- Figma input ---
@@ -154,10 +342,14 @@
   });
 
   function getTolerance() {
+    const s = parseInt(document.getElementById('tol-spacing').value);
+    const c = parseInt(document.getElementById('tol-color').value);
+    const r = parseInt(document.getElementById('tol-radius').value);
+
     return {
-      spacing: parseInt(document.getElementById('tol-spacing').value) || 2,
-      color: parseInt(document.getElementById('tol-color').value) || 5,
-      borderRadius: parseInt(document.getElementById('tol-radius').value) || 2
+      spacing: isNaN(s) ? 2 : s,
+      color: isNaN(c) ? 5 : c,
+      borderRadius: isNaN(r) ? 2 : r
     };
   }
 
@@ -165,9 +357,9 @@
   if (chrome.storage) {
     chrome.storage.local.get(['tolerance'], (result) => {
       if (result.tolerance) {
-        document.getElementById('tol-spacing').value = result.tolerance.spacing ?? 2;
-        document.getElementById('tol-color').value = result.tolerance.color ?? 5;
-        document.getElementById('tol-radius').value = result.tolerance.borderRadius ?? 2;
+        if (result.tolerance.spacing !== undefined) document.getElementById('tol-spacing').value = result.tolerance.spacing;
+        if (result.tolerance.color !== undefined) document.getElementById('tol-color').value = result.tolerance.color;
+        if (result.tolerance.borderRadius !== undefined) document.getElementById('tol-radius').value = result.tolerance.borderRadius;
       }
     });
   }
@@ -176,7 +368,11 @@
   settingsPanel.addEventListener('change', () => {
     const tol = getTolerance();
     if (chrome.storage) {
-      chrome.storage.local.set({ tolerance: tol });
+      try {
+        chrome.storage.local.set({ tolerance: tol });
+      } catch (e) {
+        checkContext(e);
+      }
     }
   });
 
@@ -218,19 +414,35 @@
   });
 
   // --- Render results ---
+  function appendStat(parent, label, value, valueClass) {
+    const stat = document.createElement('div');
+    stat.className = 'stat';
+    
+    const labelEl = document.createElement('span');
+    labelEl.className = 'stat-label';
+    labelEl.textContent = label;
+    
+    const valueEl = document.createElement('span');
+    valueEl.className = `stat-value ${valueClass}`;
+    valueEl.textContent = value;
+    
+    stat.appendChild(labelEl);
+    stat.appendChild(valueEl);
+    parent.appendChild(stat);
+  }
+
   function renderResults(report) {
     resultsSection.classList.remove('hidden');
 
     // Summary
     const s = report.summary;
-    resultsSummary.innerHTML = `
-      <span class="stat stat-matched">${s.matched}/${s.total} matched</span>
-      <span class="stat stat-mismatched">${s.mismatched} mismatched</span>
-      <span class="stat stat-missing">${s.missing} missing</span>
-    `;
+    resultsSummary.textContent = '';
+    appendStat(resultsSummary, 'Matched', s.matched, 'stat-matched');
+    appendStat(resultsSummary, 'Mismatched', s.mismatched, 'stat-mismatched');
+    appendStat(resultsSummary, 'Missing', s.missing, 'stat-missing');
 
     // Build result list
-    resultsList.innerHTML = '';
+    resultsList.textContent = '';
 
     // Sort: mismatches first (major > minor), then missing, then matches
     const severityOrder = { major: 0, minor: 1, negligible: 2 };
@@ -261,7 +473,12 @@
       for (const [group, items] of Object.entries(grouped)) {
         const groupEl = document.createElement('div');
         groupEl.className = 'result-group';
-        groupEl.innerHTML = `<div class="result-group-header">${group}</div>`;
+        
+        const header = document.createElement('div');
+        header.className = 'result-group-header';
+        header.textContent = group;
+        groupEl.appendChild(header);
+
         items.forEach(r => groupEl.appendChild(createResultRow(r)));
         resultsList.appendChild(groupEl);
       }
@@ -271,7 +488,14 @@
     if (matches.length > 0) {
       const toggle = document.createElement('button');
       toggle.className = 'matched-toggle';
-      toggle.innerHTML = `<span class="arrow">&#9654;</span> ${matches.length} matched properties`;
+      
+      const arrow = document.createElement('span');
+      arrow.className = 'arrow';
+      arrow.textContent = '\u25B6'; // arrow right
+      
+      toggle.appendChild(arrow);
+      toggle.appendChild(document.createTextNode(` ${matches.length} matched properties`));
+
       const content = document.createElement('div');
       content.className = 'matched-content';
 
@@ -279,7 +503,12 @@
       for (const [group, items] of Object.entries(grouped)) {
         const groupEl = document.createElement('div');
         groupEl.className = 'result-group';
-        groupEl.innerHTML = `<div class="result-group-header">${group}</div>`;
+        
+        const header = document.createElement('div');
+        header.className = 'result-group-header';
+        header.textContent = group;
+        groupEl.appendChild(header);
+
         items.forEach(r => groupEl.appendChild(createResultRow(r)));
         content.appendChild(groupEl);
       }
@@ -308,102 +537,121 @@
     const row = document.createElement('div');
     row.className = 'result-row';
 
-    const icon = r.status === 'match' ? '&#10003;' :
-                 r.status === 'missing' ? '&#9888;' : '&#10007;';
-    const iconColor = r.status === 'match' ? 'var(--green)' :
-                      r.status === 'missing' ? 'var(--orange)' : 'var(--red)';
+    const icon = document.createElement('span');
+    icon.className = 'result-icon';
+    icon.style.color = r.status === 'match' ? 'var(--green)' : r.status === 'missing' ? 'var(--orange)' : 'var(--red)';
+    icon.textContent = r.status === 'match' ? '\u2713' : r.status === 'missing' ? '\u26A0' : '\u2717';
+    row.appendChild(icon);
 
-    let expectedHtml = formatValue(r.property, r.expected);
-    let actualHtml = r.actual !== null ? formatValue(r.property, r.actual) : '<span class="result-value missing">n/a</span>';
-
-    let severityHtml = '';
+    const prop = document.createElement('span');
+    prop.className = 'result-prop';
+    prop.textContent = r.property;
     if (r.severity && r.status !== 'match') {
-      severityHtml = `<span class="severity-badge severity-${r.severity}">${r.severity}</span>`;
+      const sev = document.createElement('span');
+      sev.className = `severity-badge severity-${r.severity}`;
+      sev.textContent = r.severity;
+      prop.appendChild(sev);
     }
+    row.appendChild(prop);
 
-    let noteHtml = r.note ? `<span class="result-note">(${r.note})</span>` : '';
-
-    const valueClass = r.status === 'match' ? 'match' :
-                       r.status === 'missing' ? 'missing' : 'mismatch';
-
-    // Build expected column with var chip if applicable
+    const expectedCol = document.createElement('span');
+    expectedCol.className = 'result-expected';
+    
     const varInfo = currentVarMap[r.property];
-    let expectedCol = '';
     if (varInfo) {
       const overridden = varOverrides[r.property];
       const displayValue = overridden || r.expected;
-      expectedCol = `<span class="result-label">exp</span> `
-        + `<span class="var-chip" data-prop="${escapeHtml(r.property)}" title="${escapeHtml(varInfo.original)}">${escapeHtml(varInfo.varName)}</span>`
-        + ` <span class="result-value var-resolved">${escapeHtml(displayValue)}</span>`
-        + colorSwatchHtml(r.property, displayValue);
-    } else {
-      expectedCol = `<span class="result-label">exp</span> ${expectedHtml}`;
-    }
+      
+      const label = document.createElement('span');
+      label.className = 'result-label';
+      label.textContent = 'exp';
+      expectedCol.appendChild(label);
 
-    row.innerHTML = `
-      <span class="result-icon" style="color:${iconColor}">${icon}</span>
-      <span class="result-prop">${r.property}${severityHtml}</span>
-      <span class="result-expected">${expectedCol}</span>
-      <span class="result-actual"><span class="result-label">act</span> <span class="result-value ${valueClass}">${r.actual !== null ? escapeHtml(r.actual) : 'n/a'}</span>${colorSwatchHtml(r.property, r.actual)}${noteHtml}</span>
-    `;
-
-    // Attach click handler to var chip
-    const chip = row.querySelector('.var-chip');
-    if (chip) {
+      const chip = document.createElement('span');
+      chip.className = 'var-chip';
+      chip.title = varInfo.original;
+      chip.textContent = varInfo.varName;
       chip.addEventListener('click', (e) => {
         e.stopPropagation();
         openVarEditor(chip, r.property, varInfo);
       });
+      expectedCol.appendChild(chip);
+
+      const val = document.createElement('span');
+      val.className = 'result-value var-resolved';
+      val.textContent = displayValue;
+      expectedCol.appendChild(val);
+      expectedCol.appendChild(createColorSwatch(r.property, displayValue));
+    } else {
+      const label = document.createElement('span');
+      label.className = 'result-label';
+      label.textContent = 'exp';
+      expectedCol.appendChild(label);
+      expectedCol.appendChild(createValueElement(r.expected, ''));
     }
+    row.appendChild(expectedCol);
+
+    const actualCol = document.createElement('span');
+    actualCol.className = 'result-actual';
+    
+    const actLabel = document.createElement('span');
+    actLabel.className = 'result-label';
+    actLabel.textContent = 'act';
+    actualCol.appendChild(actLabel);
+
+    if (r.actual !== null) {
+      const val = document.createElement('span');
+      val.className = `result-value ${r.status === 'match' ? 'match' : 'mismatch'}`;
+      val.textContent = r.actual;
+      actualCol.appendChild(val);
+      actualCol.appendChild(createColorSwatch(r.property, r.actual));
+      if (r.note) {
+        const note = document.createElement('span');
+        note.className = 'result-note';
+        note.textContent = `(${r.note})`;
+        actualCol.appendChild(note);
+      }
+      if (r.status === 'mismatch') {
+        const fixBtn = document.createElement('button');
+        fixBtn.className = 'btn btn-xs copy-fix-btn';
+        fixBtn.textContent = 'Fix';
+        fixBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          navigator.clipboard.writeText(`${r.property}: ${r.expected};`).then(() => {
+            fixBtn.textContent = 'Copied!';
+            fixBtn.classList.add('btn-success');
+            setTimeout(() => { fixBtn.textContent = 'Fix'; fixBtn.classList.remove('btn-success'); }, 1000);
+          });
+        });
+        actualCol.appendChild(fixBtn);
+      }
+    } else {
+      const nA = document.createElement('span');
+      nA.className = 'result-value missing';
+      nA.textContent = 'n/a';
+      actualCol.appendChild(nA);
+    }
+    row.appendChild(actualCol);
 
     return row;
   }
 
-  function openVarEditor(chip, property, varInfo) {
-    // Don't open if already editing
-    if (chip.parentElement.querySelector('.var-override-input')) return;
-
-    const currentValue = varOverrides[property] || varInfo.fallback || '';
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.className = 'var-override-input';
-    input.value = currentValue;
-    input.placeholder = varInfo.fallback || 'value';
-
-    // Insert after the chip
-    chip.after(input);
-    input.focus();
-    input.select();
-
-    const commit = () => {
-      const newVal = input.value.trim();
-      if (newVal && newVal !== varInfo.fallback) {
-        varOverrides[property] = newVal;
-      } else {
-        delete varOverrides[property];
-      }
-      input.remove();
-      runComparison();
-    };
-
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') commit();
-      if (e.key === 'Escape') input.remove();
-    });
-    input.addEventListener('blur', commit);
+  function createValueElement(value, className) {
+    const el = document.createElement('span');
+    el.className = 'result-value ' + className;
+    el.textContent = value;
+    return el;
   }
 
-  function formatValue(property, value) {
-    let swatch = colorSwatchHtml(property, value);
-    return `<span class="result-value">${escapeHtml(value)}</span>${swatch}`;
-  }
-
-  function colorSwatchHtml(property, value) {
-    if (!value) return '';
-    const isColor = property === 'color' || property === 'background-color' ||
-                    (property.includes('border') && property.includes('color'));
-    if (!isColor) return '';
-    return ` <span class="color-swatch" style="background:${escapeHtml(value)}"></span>`;
+  function createColorSwatch(property, value) {
+    const el = document.createElement('span');
+    if (!value) return el;
+    const isColor = property === 'color' || property === 'background-color' || (property.includes('border') && property.includes('color'));
+    if (isColor) {
+      el.className = 'color-swatch';
+      el.style.backgroundColor = value;
+    }
+    return el;
   }
 
   function escapeHtml(str) {
@@ -451,8 +699,8 @@
     extractedStyles.textContent = 'Pick an element to extract styles.';
     elementInfo.classList.add('hidden');
     resultsSection.classList.add('hidden');
-    resultsSummary.innerHTML = '';
-    resultsList.innerHTML = '';
+    resultsSummary.textContent = '';
+    resultsList.textContent = '';
     resultsFilter.value = '';
     compareBtn.disabled = true;
   });
@@ -470,17 +718,17 @@
 
   function refreshMappingsList() {
     getSavedMappings((mappings) => {
-      mappingSelect.innerHTML = '';
-      if (mappings.length === 0) {
-        mappingSelect.innerHTML = '<option value="">-- No saved mappings --</option>';
-      } else {
-        mappingSelect.innerHTML = '<option value="">-- Select mapping --</option>';
-        for (const m of mappings) {
-          const opt = document.createElement('option');
-          opt.value = m.name;
-          opt.textContent = m.name;
-          mappingSelect.appendChild(opt);
-        }
+      mappingSelect.textContent = '';
+      const defaultOpt = document.createElement('option');
+      defaultOpt.value = '';
+      defaultOpt.textContent = mappings.length === 0 ? '-- No saved mappings --' : '-- Select mapping --';
+      mappingSelect.appendChild(defaultOpt);
+      
+      for (const m of mappings) {
+        const opt = document.createElement('option');
+        opt.value = m.name;
+        opt.textContent = m.name;
+        mappingSelect.appendChild(opt);
       }
       updateMappingButtons();
     });
@@ -723,9 +971,13 @@
     const reader = new FileReader();
     reader.onload = () => {
       figmaImage = reader.result;
-      // Show preview thumb in drop zone
       figmaDropZone.classList.add('has-image');
-      figmaDropZone.innerHTML = `<img src="${figmaImage}" class="preview-thumb" alt="Figma design">`;
+      figmaDropZone.textContent = '';
+      const img = document.createElement('img');
+      img.src = figmaImage;
+      img.className = 'preview-thumb';
+      img.alt = 'Figma design';
+      figmaDropZone.appendChild(img);
       renderOverlay();
     };
     reader.readAsDataURL(file);
@@ -866,7 +1118,14 @@
     overlayMatchInfo.classList.add('hidden');
     // Reset drop zone
     figmaDropZone.classList.remove('has-image');
-    figmaDropZone.innerHTML = '<p>Drop or paste Figma screenshot here</p><p class="text-muted">Or click to upload</p>';
+    figmaDropZone.textContent = '';
+    const p1 = document.createElement('p');
+    p1.textContent = 'Drop or paste Figma screenshot here';
+    const p2 = document.createElement('p');
+    p2.className = 'text-muted';
+    p2.textContent = 'Or click to upload';
+    figmaDropZone.appendChild(p1);
+    figmaDropZone.appendChild(p2);
   });
 
 })();

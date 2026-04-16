@@ -2,7 +2,87 @@
 // normalized key-value pairs, expanding shorthands.
 
 const FigmaParser = {
-  parse(cssText) {
+  parse(input) {
+    if (!input) return { styles: {}, varMap: {} };
+
+    // Handle JSON object (direct from API)
+    if (typeof input === 'object' && input !== null) {
+      return this._parseNodeObject(input);
+    }
+
+    // Handle JSON string (if pasted into textarea)
+    if (typeof input === 'string' && input.trim().startsWith('{')) {
+      try {
+        const obj = JSON.parse(input);
+        return this._parseNodeObject(obj);
+      } catch (e) {
+        // Fall back to CSS parsing if JSON is malformed
+      }
+    }
+
+    return this._parseCSSText(input);
+  },
+
+  _parseNodeObject(node) {
+    const doc = node.document || node;
+    const styles = {};
+    const varMap = {};
+
+    // 1. Sizing
+    const box = doc.absoluteBoundingBox || doc.boundingBox;
+    if (box) {
+      styles['width'] = `${Math.round(box.width)}px`;
+      styles['height'] = `${Math.round(box.height)}px`;
+    }
+
+    // 2. Background/Color
+    if (Array.isArray(doc.fills) && doc.fills.length > 0) {
+      const fill = doc.fills[0];
+      if (fill.type === 'SOLID') {
+        const color = this._figmaColorToRgb(fill.color, fill.opacity);
+        styles['background-color'] = color;
+      }
+    }
+
+    // 3. Typography
+    if (doc.style) {
+      const s = doc.style;
+      if (s.fontFamily) styles['font-family'] = s.fontFamily;
+      if (s.fontSize) styles['font-size'] = `${s.fontSize}px`;
+      if (s.fontWeight) styles['font-weight'] = s.fontWeight.toString();
+      if (s.lineHeightPx) styles['line-height'] = `${Math.round(s.lineHeightPx)}px`;
+      if (s.letterSpacing) styles['letter-spacing'] = `${s.letterSpacing}px`;
+      if (s.textAlignHorizontal) styles['text-align'] = s.textAlignHorizontal.toLowerCase();
+    }
+
+    // 4. Border Radius
+    if (doc.cornerRadius !== undefined) {
+      const r = `${doc.cornerRadius}px`;
+      styles['border-top-left-radius'] = r;
+      styles['border-top-right-radius'] = r;
+      styles['border-bottom-right-radius'] = r;
+      styles['border-bottom-left-radius'] = r;
+    }
+
+    // 5. Padding/Gap (Auto Layout)
+    if (doc.paddingTop !== undefined) styles['padding-top'] = `${doc.paddingTop}px`;
+    if (doc.paddingRight !== undefined) styles['padding-right'] = `${doc.paddingRight}px`;
+    if (doc.paddingBottom !== undefined) styles['padding-bottom'] = `${doc.paddingBottom}px`;
+    if (doc.paddingLeft !== undefined) styles['padding-left'] = `${doc.paddingLeft}px`;
+    if (doc.itemSpacing !== undefined) styles['gap'] = `${doc.itemSpacing}px`;
+
+    return { styles, varMap };
+  },
+
+  _figmaColorToRgb(c, opacity = 1) {
+    const r = Math.round(c.r * 255);
+    const g = Math.round(c.g * 255);
+    const b = Math.round(c.b * 255);
+    const a = opacity !== undefined ? opacity : 1;
+    return a === 1 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${a})`;
+  },
+
+  _parseCSSText(cssText) {
     if (!cssText || !cssText.trim()) return { styles: {}, varMap: {} };
 
     // Strip CSS comments

@@ -29,6 +29,7 @@
     "tabs"
   ],
   "host_permissions": [
-    "<all_urls>"
+    "<all_urls>",
+    "https://api.figma.com/*"
   ]
 }

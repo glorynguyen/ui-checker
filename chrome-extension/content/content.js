@@ -86,6 +86,7 @@
 
     return {
       element: getElementDescriptor(el),
+      figmaId: el.dataset.figmaId || el.getAttribute('data-figma-id') || null,
       dimensions: {
         width: Math.round(rect.width),
         height: Math.round(rect.height)
