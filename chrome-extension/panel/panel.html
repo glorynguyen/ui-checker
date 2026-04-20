@@ -12,7 +12,10 @@
       <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
       </svg>
-      <span class="logo-text">UI CHECKER</span>
+      <div class="logo-copy">
+        <span class="logo-text">UI Checker</span>
+        <span class="logo-subtext">Figma fidelity inside DevTools</span>
+      </div>
     </div>
     <button id="pick-btn" class="btn btn-primary">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -30,73 +33,134 @@
     </button>
   </header>
 
-  <!-- Selector input -->
-  <div class="selector-row">
-    <input type="text" id="selector-input" class="input-field selector-input" placeholder="Paste CSS selector (e.g. #app > .card)">
-    <button id="selector-btn" class="btn">Select</button>
+  <div class="hero-card section-card">
+    <div class="hero-copy">
+      <div class="section-title">Inspect And Compare</div>
+      <p class="section-description">Pick a live component, fetch the matching Figma spec, then review style and visual mismatches in one place.</p>
+    </div>
+    <!-- Selector input -->
+    <div class="selector-row">
+      <input type="text" id="selector-input" class="input-field selector-input" placeholder="Paste CSS selector (e.g. #app > .card)">
+      <button id="selector-btn" class="btn">Select</button>
+    </div>
   </div>
 
   <!-- Selected element info -->
   <div id="element-info" class="section-card element-info hidden">
-    Selected: <strong id="element-name"></strong>
+    <span class="element-info-label">Selected Element</span>
+    <strong id="element-name"></strong>
     <span class="text-muted" style="margin-left:auto" id="element-dims"></span>
   </div>
 
   <!-- Settings panel (collapsible) -->
   <div id="settings-panel" class="section-card settings-panel hidden">
-    <div class="section-title">Tolerance Settings</div>
-    <div class="setting-row">
-      <label>Spacing tolerance (px)</label>
-      <input type="number" id="tol-spacing" class="input-field" value="2" min="0" max="20">
-    </div>
-    <div class="setting-row">
-      <label>Color tolerance (channel)</label>
-      <input type="number" id="tol-color" class="input-field" value="5" min="0" max="50">
-    </div>
-    <div class="setting-row">
-      <label>Border radius tolerance (px)</label>
-      <input type="number" id="tol-radius" class="input-field" value="2" min="0" max="10">
-    </div>
+    <div class="settings-shell">
+      <div class="settings-intro">
+        <div class="section-title">Workspace Settings</div>
+        <p class="section-description">Tune tolerance rules, manage the Figma connection, and save reusable variable mapping presets.</p>
+      </div>
 
-    <div class="config-group">
-      <div class="section-title">Figma Connection</div>
+      <div class="settings-grid">
+        <section class="settings-card">
+          <div class="settings-card-header">
+            <div>
+              <div class="section-title">Tolerance Rules</div>
+              <p class="section-description">Control how strict the diff engine should be before a mismatch is flagged.</p>
+            </div>
+          </div>
 
-      <div class="setting-row" style="margin-top:8px;">
-        <input type="text" id="figma-file-key" class="input-field" placeholder="Figma File Key" style="flex:1;">
-      </div>
-      <div class="setting-row" style="margin-top:8px;">
-        <input type="password" id="mcp-token" class="input-field" placeholder="Personal Access Token" style="flex:1;">
-      </div>
-      <div class="setting-row" style="margin-top:8px;">
-        <button id="mcp-connect-btn" class="btn btn-sm btn-primary">Connect</button>
-        <span id="mcp-status" class="status-badge">Disconnected</span>
-      </div>
-      <div class="setting-row" style="margin-top:12px;">
-        <input type="text" id="mcp-node-id" class="input-field" placeholder="Figma Node ID / URL" style="flex:1;">
-        <button id="mcp-sync-btn" class="btn btn-sm btn-primary" title="Sync from open Figma tab">Sync</button>
-        <button id="mcp-fetch-btn" class="btn btn-sm">Fetch</button>
-      </div>
-      <div class="config-hint">
-        Tip: Paste a Figma layer URL or use <b>Sync</b> to auto-detect the Node ID from an active Figma browser tab.
-      </div>
-    </div>
+          <div class="setting-list">
+            <label class="setting-row">
+              <span>Spacing tolerance</span>
+              <div class="setting-input-wrap">
+                <input type="number" id="tol-spacing" class="input-field" value="2" min="0" max="20">
+                <span class="setting-unit">px</span>
+              </div>
+            </label>
+            <label class="setting-row">
+              <span>Color tolerance</span>
+              <div class="setting-input-wrap">
+                <input type="number" id="tol-color" class="input-field" value="5" min="0" max="50">
+                <span class="setting-unit">rgb</span>
+              </div>
+            </label>
+            <label class="setting-row">
+              <span>Border radius tolerance</span>
+              <div class="setting-input-wrap">
+                <input type="number" id="tol-radius" class="input-field" value="2" min="0" max="10">
+                <span class="setting-unit">px</span>
+              </div>
+            </label>
+          </div>
+        </section>
 
-    <div class="config-group">
-      <div class="section-title">Variable Mappings</div>
-      <div class="mapping-controls">
-        <select id="mapping-select" class="input-field">
-          <option value="">-- No saved mappings --</option>
-        </select>
-        <button id="mapping-load-btn" class="btn btn-xs" disabled>Load</button>
-        <button id="mapping-delete-btn" class="btn btn-xs" disabled>Del</button>
-      </div>
-      <div class="mapping-controls">
-        <button id="mapping-save-btn" class="btn btn-xs">Save Current</button>
-        <button id="mapping-export-btn" class="btn btn-xs" disabled>Export</button>
-        <label class="btn btn-xs mapping-import-label">
-          Import
-          <input type="file" id="mapping-import-input" accept=".json" hidden>
-        </label>
+        <section class="settings-card settings-card-wide">
+          <div class="settings-card-header settings-card-header-inline">
+            <div>
+              <div class="section-title">Figma Connection</div>
+              <p class="section-description">Authenticate once, then fetch specs from a node URL, ID, or synced browser tab.</p>
+            </div>
+            <span id="mcp-status" class="status-badge">Disconnected</span>
+          </div>
+
+          <div class="field-grid">
+            <label class="field-stack">
+              <span class="field-label">Figma File Key</span>
+              <input type="text" id="figma-file-key" class="input-field" placeholder="Paste the file key">
+            </label>
+            <label class="field-stack">
+              <span class="field-label">Personal Access Token</span>
+              <input type="password" id="mcp-token" class="input-field" placeholder="Paste your access token">
+            </label>
+            <label class="field-stack field-stack-wide">
+              <span class="field-label">Figma Node ID Or URL</span>
+              <input type="text" id="mcp-node-id" class="input-field" placeholder="Paste a Figma node URL or node ID">
+            </label>
+          </div>
+
+          <div class="connection-actions">
+            <button id="mcp-connect-btn" class="btn btn-primary">Connect</button>
+            <div class="action-cluster">
+              <button id="mcp-sync-btn" class="btn" title="Sync from open Figma tab">Sync Tab</button>
+              <button id="mcp-fetch-btn" class="btn">Fetch Spec</button>
+              <button id="mcp-refresh-btn" class="btn" title="Bypass cache and refetch from Figma">Refresh Live</button>
+            </div>
+          </div>
+
+          <div class="connection-meta">
+            <div id="figma-cache-status" class="config-meta hidden"></div>
+            <div class="config-hint">
+              Tip: Paste a Figma layer URL or use <b>Sync Tab</b> to auto-detect the active node from an open Figma browser tab.
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-card settings-card-wide">
+          <div class="settings-card-header">
+            <div>
+              <div class="section-title">Variable Mappings</div>
+              <p class="section-description">Save and reuse fallback overrides for `var()`-based Figma values across repeated comparisons.</p>
+            </div>
+          </div>
+
+          <div class="mapping-stack">
+            <div class="mapping-controls mapping-controls-primary">
+              <select id="mapping-select" class="input-field">
+                <option value="">-- No saved mappings --</option>
+              </select>
+              <button id="mapping-load-btn" class="btn" disabled>Load</button>
+              <button id="mapping-delete-btn" class="btn" disabled>Delete</button>
+            </div>
+            <div class="mapping-controls">
+              <button id="mapping-save-btn" class="btn">Save Current</button>
+              <button id="mapping-export-btn" class="btn" disabled>Export</button>
+              <label class="btn mapping-import-label">
+                Import JSON
+                <input type="file" id="mapping-import-input" accept=".json" hidden>
+              </label>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   </div>
@@ -104,17 +168,23 @@
   <!-- Side-by-side panels -->
   <div class="panels">
     <div class="panel-section">
-      <div class="section-title">Figma Spec</div>
+      <div class="panel-header">
+        <div class="section-title">Figma Spec</div>
+        <p class="section-description">Paste CSS directly or fill this automatically from the selected Figma node.</p>
+      </div>
       <textarea id="figma-input" placeholder="Paste CSS or fetch from Figma..."></textarea>
     </div>
     <div class="panel-section">
-      <div class="section-title">Live Component</div>
+      <div class="panel-header">
+        <div class="section-title">Live Component</div>
+        <p class="section-description">Computed styles from the currently selected DOM element appear here.</p>
+      </div>
       <pre id="extracted-styles" class="styles-display">Pick an element to extract styles.</pre>
     </div>
   </div>
 
   <!-- Compare button -->
-  <div class="actions">
+  <div class="actions actions-primary">
     <button id="compare-btn" class="btn btn-primary" style="flex:1" disabled>Run Comparison</button>
   </div>
 

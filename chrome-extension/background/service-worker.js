@@ -5,6 +5,127 @@ let figmaClient = null;
 importScripts('../lib/figma-api-client.js');
 
 const panelPorts = new Map(); // tabId -> port
+const FIGMA_CACHE_STORAGE_KEY = 'figmaNodeCache';
+const FIGMA_CACHE_TTL_MS = 10 * 60 * 1000;
+
+function getCacheKey(fileKey, nodeId) {
+  return `${fileKey}::${nodeId}`;
+}
+
+async function getFigmaCache() {
+  const result = await chrome.storage.local.get([FIGMA_CACHE_STORAGE_KEY]);
+  return result[FIGMA_CACHE_STORAGE_KEY] || {};
+}
+
+async function setFigmaCache(cache) {
+  await chrome.storage.local.set({ [FIGMA_CACHE_STORAGE_KEY]: cache });
+}
+
+async function pruneExpiredCache(cache) {
+  const nextCache = { ...cache };
+  const now = Date.now();
+  let changed = false;
+
+  for (const [key, entry] of Object.entries(nextCache)) {
+    if (!entry || !entry.updatedAt || now - entry.updatedAt > FIGMA_CACHE_TTL_MS) {
+      delete nextCache[key];
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    await setFigmaCache(nextCache);
+  }
+
+  return nextCache;
+}
+
+async function readCacheEntry(fileKey, nodeId) {
+  const cache = await pruneExpiredCache(await getFigmaCache());
+  return cache[getCacheKey(fileKey, nodeId)] || null;
+}
+
+async function writeCacheEntry(fileKey, nodeId, patch) {
+  const cache = await pruneExpiredCache(await getFigmaCache());
+  const key = getCacheKey(fileKey, nodeId);
+  const existing = cache[key] || {};
+  const updatedAt = patch.updatedAt || existing.updatedAt || Date.now();
+
+  cache[key] = {
+    ...existing,
+    ...patch,
+    updatedAt
+  };
+
+  await setFigmaCache(cache);
+  return cache[key];
+}
+
+function buildCacheMeta(entry, source, assetType) {
+  return {
+    key: entry?.cacheKey || null,
+    assetType,
+    source,
+    cachedAt: entry?.updatedAt || Date.now(),
+    ttlMs: FIGMA_CACHE_TTL_MS
+  };
+}
+
+async function getNodeData(fileKey, nodeId, forceRefresh = false) {
+  const cacheKey = getCacheKey(fileKey, nodeId);
+  const cached = forceRefresh ? null : await readCacheEntry(fileKey, nodeId);
+  if (cached?.nodeData) {
+    return {
+      data: cached.nodeData,
+      meta: buildCacheMeta({ ...cached, cacheKey }, 'cache', 'node')
+    };
+  }
+
+  const client = await ensureClient();
+  if (!client) {
+    throw new Error('No token found. Please connect in settings.');
+  }
+
+  const nodeData = await client.getNode(nodeId, fileKey);
+  const updatedEntry = await writeCacheEntry(fileKey, nodeId, {
+    cacheKey,
+    nodeData,
+    updatedAt: Date.now()
+  });
+
+  return {
+    data: nodeData,
+    meta: buildCacheMeta({ ...updatedEntry, cacheKey }, 'network', 'node')
+  };
+}
+
+async function getImageData(fileKey, nodeId, forceRefresh = false) {
+  const cacheKey = getCacheKey(fileKey, nodeId);
+  const cached = forceRefresh ? null : await readCacheEntry(fileKey, nodeId);
+  if (cached?.imageUrl) {
+    return {
+      imageUrl: cached.imageUrl,
+      meta: buildCacheMeta({ ...cached, cacheKey }, 'cache', 'image')
+    };
+  }
+
+  const client = await ensureClient();
+  if (!client) {
+    throw new Error('No token found. Please connect in settings.');
+  }
+
+  const imageData = await client.getImage(nodeId, fileKey);
+  const updatedEntry = await writeCacheEntry(fileKey, nodeId, {
+    cacheKey,
+    imageUrl: imageData.imageUrl,
+    updatedAt: Date.now()
+  });
+
+  return {
+    imageUrl: imageData.imageUrl,
+    meta: buildCacheMeta({ ...updatedEntry, cacheKey }, 'network', 'image')
+  };
+}
 
 async function ensureClient() {
   if (figmaClient) return figmaClient;
@@ -36,31 +157,30 @@ chrome.runtime.onConnect.addListener((port) => {
     }
 
     if (msg.action === 'MCP_GET_NODE') {
-        const client = await ensureClient();
-        if (client) {
-            client.getNode(msg.nodeId, msg.fileKey).then(nodeData => {
-                port.postMessage({ action: 'MCP_NODE_DATA', data: nodeData });
-            }).catch(err => {
-                console.error('[SW] Figma node fetch failed:', err);
-                port.postMessage({ action: 'MCP_NODE_FETCH_FAILED', error: err.message });
-            });
-        } else {
-            console.error('[SW] No Figma client available');
-            port.postMessage({ action: 'MCP_CONNECTION_FAILED', error: 'No token found. Please connect in settings.' });
+      getNodeData(msg.fileKey, msg.nodeId, Boolean(msg.forceRefresh)).then(({ data, meta }) => {
+        port.postMessage({ action: 'MCP_NODE_DATA', data, meta, requestId: msg.requestId });
+      }).catch(err => {
+        console.error('[SW] Figma node fetch failed:', err);
+        if (err.message === 'No token found. Please connect in settings.') {
+          port.postMessage({ action: 'MCP_CONNECTION_FAILED', error: err.message, requestId: msg.requestId });
+          return;
         }
-        return;
+        port.postMessage({ action: 'MCP_NODE_FETCH_FAILED', error: err.message, requestId: msg.requestId });
+      });
+      return;
     }
 
     if (msg.action === 'MCP_GET_IMAGE') {
-      const client = await ensureClient();
-      if (client) {
-        client.getImage(msg.nodeId, msg.fileKey).then(data => {
-          port.postMessage({ action: 'MCP_IMAGE_DATA', imageUrl: data.imageUrl });
-        }).catch(err => {
-          console.error('[SW] Figma image fetch failed:', err);
-          port.postMessage({ action: 'MCP_IMAGE_FETCH_FAILED', error: err.message });
-        });
-      }
+      getImageData(msg.fileKey, msg.nodeId, Boolean(msg.forceRefresh)).then(({ imageUrl, meta }) => {
+        port.postMessage({ action: 'MCP_IMAGE_DATA', imageUrl, meta, requestId: msg.requestId });
+      }).catch(err => {
+        console.error('[SW] Figma image fetch failed:', err);
+        if (err.message === 'No token found. Please connect in settings.') {
+          port.postMessage({ action: 'MCP_CONNECTION_FAILED', error: err.message, requestId: msg.requestId });
+          return;
+        }
+        port.postMessage({ action: 'MCP_IMAGE_FETCH_FAILED', error: err.message, requestId: msg.requestId });
+      });
       return;
     }
 

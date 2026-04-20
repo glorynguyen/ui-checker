@@ -1,154 +1,199 @@
-# Pixel Perfect — UI Fidelity Checker for Chrome
+# UI Checker — Implementation Review And Roadmap
 
-> Ship UI that matches the design. Every pixel, every time.
+> Last reviewed against the repository on 2026-04-20.
 
-A Chrome DevTools extension that bridges the gap between Figma specs and browser output. Pick an element, paste the expected CSS, and instantly see what's off — spacing, color, typography, layout — with severity-aware diffs and actionable reports.
-
----
-
-## Vision
-
-Pixel-perfect UI shouldn't require eyeballing. This tool gives frontend developers a **fast, programmatic feedback loop** — paste what Figma says, see what the browser actually rendered, fix the diff before anyone reviews your PR.
+This document reflects what is actually implemented in the current codebase, not just the original intent.
 
 ---
 
-## What's Built (Phase 1) ✅
+## Product Vision
 
-All core functionality is shipped and working:
-
-| Feature | Description |
-|---------|-------------|
-| Element Picker | Hover-highlight, click-select, tooltip with tag/class/dimensions |
-| Style Extractor | 40+ curated properties across spacing, typography, sizing, layout, visual |
-| Figma CSS Parser | Comment stripping, shorthand expansion, Figma quirks handling |
-| Style Normalizer | Color (hex→rgb), units (rem→px), font-weight keywords, zero values |
-| Diff Engine | Tolerance-aware comparison with major/minor/negligible severity |
-| Panel UI | Grouped results, color swatches, collapsible sections, copy-to-clipboard report |
-| Settings | Configurable tolerance thresholds (spacing, color, border-radius) via chrome.storage |
-| Batch Mode | Multi-element comparison with per-element accordion results |
-| CSS Variables | var() extraction, fallback display, override mappings with save/load/export |
+Ship UI that matches the design without relying on eyeballing. The extension gives frontend developers a fast feedback loop inside Chrome DevTools: select an element, fetch or paste the expected Figma styles, compare them against the live browser output, and act on the differences immediately.
 
 ---
 
-## Roadmap
+## Current Status Summary
+
+| Area | Status | Notes |
+|------|--------|-------|
+| Core style diff workflow | Implemented | Element picker, selector-based selection, style extraction, parser, normalizer, diff engine, grouped results, copyable report |
+| CSS variable workflow | Implemented | `var()` parsing, fallback display, override editing, save/load/import/export mappings |
+| Visual overlay comparison | Implemented | Element capture, Figma image upload/paste, onion-skin, side-by-side, pixel diff heatmap |
+| Figma API integration | Partially implemented | Personal access token auth, file key + node URL parsing, node fetch, image fetch, tab sync, short-term local cache |
+| Design token validation | Not implemented | No token import, token coverage, or token suggestions found |
+| AI vision comparison | Not implemented | No model integration or screenshot-to-LLM flow found |
+| CI/CD integration | Not implemented | No CLI, baseline workflow, CI report output, or GitHub Action found |
+
+---
+
+## Implemented Today
+
+### Core Comparison Flow
+
+- Element picker with hover highlight, click select, tooltip, and escape-to-cancel
+- Selection by CSS selector in addition to click picking
+- Curated extraction of browser computed styles across spacing, typography, sizing, layout, and visual groups
+- Figma CSS parsing with comment stripping and shorthand expansion
+- Figma node JSON parsing for dimensions, fills, typography, radius, padding, and gap
+- Normalization for colors, font weights, font family, `rem` to `px`, zero values, and selected border cases
+- Tolerance-aware diffing for spacing, colors, and border radius
+- Results UI with grouping, severity badges, color swatches, filtering, collapsible matched properties, and report copy
+- One-click "Fix" action that copies the expected declaration for a mismatched property
+
+### CSS Variable Support
+
+- Detection of `var(--token, fallback)` patterns
+- Display of variable chips and resolved fallback values in results
+- Per-property override editing before comparison
+- Saved override mappings in `chrome.storage.local`
+- Mapping load, delete, import, and export flows
+
+### Visual Overlay Comparison
+
+- Capture of the selected element from the inspected page
+- Upload, drag-and-drop, or paste of a Figma screenshot/image
+- Onion-skin blend view with opacity control
+- Side-by-side comparison view
+- Pixel-diff mode with configurable sensitivity and match percentage output
+- Auto-fetch of a Figma-rendered node image when Figma node data is fetched successfully
+
+---
+
+## Phase Review
+
+### Phase 1 — Core DevTools Diffing
+
+**Status:** Mostly implemented
+
+Implemented:
+- Element picker
+- Style extractor
+- Figma CSS parser
+- Style normalizer
+- Diff engine
+- Settings persisted via `chrome.storage.local`
+- Panel UI with grouped diffs and copyable report
+- CSS variable handling and saved mappings
+- One-click fix copying
+
+Not found in the current codebase:
+- Batch mode / multi-element comparison with per-element accordion results
+
+Conclusion:
+- Phase 1 is effectively shipped for single-element workflows.
+- `plan.md` previously overstated Phase 1 by listing batch mode as complete.
 
 ### Phase 2 — Visual Overlay Comparison
 
-Go beyond property diffs. Overlay the Figma design on top of the live page to catch visual issues that CSS values alone can't express.
+**Status:** Implemented
 
-**Key features:**
-- Screenshot capture of selected element's bounding box
-- Figma frame image upload (drag & drop or paste)
-- Opacity slider to blend Figma screenshot over live element
-- Pixel-diff heatmap highlighting regions that diverge
-- Side-by-side and onion-skin view modes
+Implemented:
+- Screenshot capture of the selected element bounding box
+- Figma frame image upload by file, drag-and-drop, and paste
+- Opacity slider for onion-skin blending
+- Pixel-diff heatmap
+- Side-by-side and onion-skin modes
 
-**Why:** Some mismatches are compositional — a 2px padding difference might be "within tolerance" but looks wrong in context. Visual overlay catches what numbers miss.
-
----
+Notes:
+- This phase appears implemented end to end in the panel, service worker, and image diff utility.
 
 ### Phase 3 — Figma API Integration
 
-Eliminate the copy-paste step entirely. Connect to Figma and auto-fetch styles for the selected component.
+**Status:** Partially implemented
 
-**Key features:**
-- Figma personal access token setup (stored in chrome.storage)
-- Paste a Figma frame URL → auto-resolve node styles
-- Component name matching between Figma and DOM (manual mapping + heuristics)
-- Cache fetched styles locally to reduce API calls
-- Support for Figma component variants
+Implemented:
+- Figma personal access token setup stored in `chrome.storage.local`
+- Paste a Figma frame/layer URL and extract file key + node ID
+- Fetch node data from the Figma REST API
+- Fetch rendered node image from the Figma REST API
+- Short-term local caching of fetched node data and rendered images
+- Sync file key and node ID from an open Figma browser tab
+- Auto-fill node ID from `data-figma-id` when present on the selected DOM element
 
-**Why:** Copy-pasting CSS from Figma is the biggest friction point. Direct integration makes the workflow near-instant.
+Not found in the current codebase:
+- Component name matching between Figma and DOM using heuristics
+- Manual mapping between Figma components and DOM components
+- Variant-aware comparison flow beyond basic node fetches
 
----
+Conclusion:
+- The integration foundation is in place, but the "copy-paste free" workflow is not fully complete yet.
 
 ### Phase 4 — Design Token Validation
 
-Check not just Figma-vs-browser, but whether the implementation uses the correct design tokens.
+**Status:** Not implemented
 
-**Key features:**
-- Import design tokens (JSON, CSS custom properties, or Style Dictionary format)
-- Flag hardcoded values that should reference a token (e.g., `#1A1A1A` instead of `var(--color-text-primary)`)
-- Token coverage report: % of properties using tokens vs hardcoded
-- Suggest closest matching token for hardcoded values
-
-**Why:** Pixel-perfect isn't just about matching Figma — it's about using the design system correctly so things stay consistent at scale.
-
----
+Not found:
+- Import of design token files
+- Validation of hardcoded values against tokens
+- Token coverage reporting
+- Closest-token suggestions
 
 ### Phase 5 — AI Vision Comparison
 
-Use vision models to catch issues that neither CSS diffs nor pixel overlays surface — layout shifts, visual hierarchy problems, spacing rhythm.
+**Status:** Not implemented
 
-**Key features:**
-- Capture screenshot of rendered component
-- Send Figma design + browser screenshot to vision model
-- Natural language summary of visual differences
-- Confidence scoring per issue
-- Annotated screenshot with callouts
-
-**Why:** Human designers catch things like "the spacing rhythm feels off" or "the visual weight is wrong." AI vision bridges that gap.
-
----
+Not found:
+- Vision model integration
+- Upload of screenshots to an AI service
+- Natural-language visual review
+- Confidence scoring
+- Annotated screenshot generation
 
 ### Phase 6 — CI/CD Integration
 
-Move fidelity checks from manual DevTools use into the automated pipeline.
+**Status:** Not implemented
 
-**Key features:**
-- CLI tool that runs headless Chrome + extension logic
-- Compare pages against stored Figma baselines
-- JSON/HTML report output for CI artifacts
-- GitHub Action for PR checks (fail if major mismatches exceed threshold)
-- Baseline management: approve/update expected snapshots
+Not found:
+- Headless CLI runner
+- Baseline storage and approval workflow
+- JSON or HTML CI artifact generation
+- GitHub Action or other CI integration for fidelity checks
 
-**Why:** Catching regressions before merge is the endgame. Manual checking doesn't scale.
-
----
-
-## Technical Decisions
-
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Manifest version | V3 | Required for Chrome Web Store, V2 deprecated |
-| UI framework | Vanilla JS + CSS | No build step, lightweight, fast iteration |
-| Color normalization | All to RGB | Browser returns RGB, simplest common format |
-| Unit normalization | All to px | Figma uses px, browser computes to px |
-| Shorthand expansion | Custom parser | Figma shorthands are predictable, no need for PostCSS |
-| Tolerance system | Configurable thresholds | Teams have different standards for "close enough" |
-| Data persistence | chrome.storage.local | User settings only, no style data persisted |
+Notes:
+- The repo includes release tooling via `semantic-release`, but that is not the same as UI fidelity CI.
 
 ---
 
-## Architecture
+## Current Architecture
 
-```
+```text
 chrome-extension/
-├── manifest.json              # Manifest V3
+├── manifest.json
 ├── devtools/
-│   ├── devtools.html          # DevTools page entry
-│   └── devtools.js            # Panel registration
+│   ├── devtools.html
+│   └── devtools.js
 ├── panel/
-│   ├── panel.html             # Main UI
-│   ├── panel.js               # Panel logic, diff display
-│   └── panel.css              # Panel styling
+│   ├── panel.html
+│   ├── panel.js
+│   └── panel.css
 ├── content/
-│   └── content.js             # Element picker + style extraction
+│   └── content.js
 ├── background/
-│   └── service-worker.js      # Message relay
+│   └── service-worker.js
 ├── lib/
-│   ├── style-extractor.js     # Computed style extraction
-│   ├── figma-parser.js        # Figma CSS parsing
-│   ├── normalizer.js          # Value normalization
-│   └── diff-engine.js         # Style comparison engine
+│   ├── style-extractor.js
+│   ├── figma-parser.js
+│   ├── normalizer.js
+│   ├── diff-engine.js
+│   ├── pixel-diff.js
+│   ├── figma-api-client.js
+│   └── comparator.js
 └── icons/
 ```
 
 ---
 
+## Recommended Next Priorities
+
+1. Finish Phase 3 by adding a real component mapping workflow and deeper Figma-to-DOM matching.
+2. Either implement batch comparison or remove it from product promises everywhere else too.
+3. Start Phase 4 with a simple token import plus hardcoded-value detection pass before attempting AI or CI work.
+
+---
+
 ## Success Criteria
 
-- Select element + paste Figma CSS → see diff in **under 10 seconds**
-- Correctly identifies spacing, typography, and color mismatches at configurable tolerance
-- Report output is clean enough to paste directly into a PR comment
-- Works on any localhost or deployed site without CORS issues
+- Select an element and compare it against Figma styles inside DevTools quickly
+- Catch spacing, typography, color, and radius mismatches with configurable tolerance
+- Provide a report that can be pasted into a PR or review thread
+- Support both manual CSS paste and direct Figma fetch workflows

@@ -26,12 +26,16 @@
   const mappingExportBtn = document.getElementById('mapping-export-btn');
   const mappingImportInput = document.getElementById('mapping-import-input');
   const resultsFilter = document.getElementById('results-filter');
+  const figmaCacheStatus = document.getElementById('figma-cache-status');
 
   // --- State ---
   let extractedData = null; // { element, dimensions, styles }
   let lastDiffReport = null;
   let currentVarMap = {};    // property → { varName, fallback, original }
   let varOverrides = {};     // property → user-overridden value
+  let figmaFetchStatus = { node: null, image: null };
+  let currentFigmaRequestId = 0;
+  let figmaFetchPending = 0;
 
 
 
@@ -57,23 +61,37 @@
         statusEl.textContent = 'Connected';
         statusEl.className = 'status-badge connected';
       } else if (msg.action === 'MCP_CONNECTION_FAILED') {
+        if (!isActiveFigmaResponse(msg)) return;
         statusEl.textContent = msg.error || 'Connection failed';
         statusEl.className = 'status-badge error';
+        markFigmaFetchComplete();
       } else if (msg.action === 'MCP_NODE_FETCH_FAILED') {
+        if (!isActiveFigmaResponse(msg)) return;
         alert('Figma Fetch Error: ' + msg.error);
-        mcpFetchBtn.disabled = false;
-        mcpFetchBtn.textContent = 'Fetch';
+        figmaFetchStatus.node = null;
+        renderFigmaCacheStatus();
+        markFigmaFetchComplete();
       } else if (msg.action === 'MCP_NODE_DATA') {
+        if (!isActiveFigmaResponse(msg)) return;
         console.log('[Panel] Received MCP Node Data:', msg.data);
         figmaInput.value = JSON.stringify(msg.data, null, 2);
-        mcpFetchBtn.disabled = false;
-        mcpFetchBtn.textContent = 'Fetch';
+        figmaFetchStatus.node = msg.meta || null;
+        renderFigmaCacheStatus();
+        markFigmaFetchComplete();
         updateCompareBtn();
       } else if (msg.action === 'MCP_IMAGE_DATA') {
+        if (!isActiveFigmaResponse(msg)) return;
         console.log('[Panel] Received MCP Image URL:', msg.imageUrl);
+        figmaFetchStatus.image = msg.meta || null;
+        renderFigmaCacheStatus();
         loadFigmaImageUrl(msg.imageUrl);
+        markFigmaFetchComplete();
       } else if (msg.action === 'MCP_IMAGE_FETCH_FAILED') {
+        if (!isActiveFigmaResponse(msg)) return;
         console.warn('[Panel] Figma visual fetch failed:', msg.error);
+        figmaFetchStatus.image = null;
+        renderFigmaCacheStatus();
+        markFigmaFetchComplete();
         // Silently fail or show a subtle hint that visual overlay won't auto-load
       } else if (msg.action === 'FIGMA_TAB_SYNCED') {
         if (msg.url) {
@@ -134,8 +152,14 @@
   }
 
   function fetchFigmaNode(inputId) {
+    return fetchFigmaNodeWithOptions(inputId, { forceRefresh: false });
+  }
+
+  function fetchFigmaNodeWithOptions(inputId, options = {}) {
     let nodeId = inputId;
     let fileKey = mcpFileKeyInput.value.trim();
+    const forceRefresh = Boolean(options.forceRefresh);
+    const requestId = ++currentFigmaRequestId;
 
     // Check if input is a URL
     if (nodeId.includes('figma.com')) {
@@ -163,8 +187,11 @@
         alert('Please enter a Figma File Key in settings or paste a full Figma URL.');
         return;
     }
-    sendMessage({ action: 'MCP_GET_NODE', nodeId, fileKey });
-    sendMessage({ action: 'MCP_GET_IMAGE', nodeId, fileKey });
+    beginFigmaFetch(forceRefresh);
+    figmaFetchStatus = { node: null, image: null };
+    renderFigmaCacheStatus();
+    sendMessage({ action: 'MCP_GET_NODE', nodeId, fileKey, forceRefresh, requestId });
+    sendMessage({ action: 'MCP_GET_IMAGE', nodeId, fileKey, forceRefresh, requestId });
   }
 
   function loadFigmaImageUrl(url) {
@@ -222,10 +249,71 @@
   // --- Figma API Configuration ---
   const mcpConnectBtn = document.getElementById('mcp-connect-btn');
   const mcpFetchBtn = document.getElementById('mcp-fetch-btn');
+  const mcpRefreshBtn = document.getElementById('mcp-refresh-btn');
   const mcpSyncBtn = document.getElementById('mcp-sync-btn');
   const mcpTokenInput = document.getElementById('mcp-token');
   const mcpFileKeyInput = document.getElementById('figma-file-key');
   const mcpNodeIdInput = document.getElementById('mcp-node-id');
+
+  function beginFigmaFetch(forceRefresh) {
+    figmaFetchPending = 2;
+    mcpFetchBtn.disabled = true;
+    mcpRefreshBtn.disabled = true;
+    mcpFetchBtn.textContent = forceRefresh ? 'Refreshing...' : 'Fetching...';
+    mcpRefreshBtn.textContent = 'Working...';
+  }
+
+  function endFigmaFetch() {
+    figmaFetchPending = 0;
+    mcpFetchBtn.disabled = false;
+    mcpRefreshBtn.disabled = false;
+    mcpFetchBtn.textContent = 'Fetch';
+    mcpRefreshBtn.textContent = 'Refresh';
+  }
+
+  function markFigmaFetchComplete() {
+    figmaFetchPending = Math.max(0, figmaFetchPending - 1);
+    if (figmaFetchPending === 0) {
+      endFigmaFetch();
+    }
+  }
+
+  function isActiveFigmaResponse(msg) {
+    return !msg.requestId || msg.requestId === currentFigmaRequestId;
+  }
+
+  function formatRelativeTime(timestamp) {
+    if (!timestamp) return 'just now';
+    const diffMs = Math.max(0, Date.now() - timestamp);
+    const diffSec = Math.round(diffMs / 1000);
+    if (diffSec < 5) return 'just now';
+    if (diffSec < 60) return `${diffSec}s ago`;
+    const diffMin = Math.round(diffSec / 60);
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHour = Math.round(diffMin / 60);
+    return `${diffHour}h ago`;
+  }
+
+  function describeMeta(label, meta) {
+    if (!meta) return `${label}: unavailable`;
+    const sourceText = meta.source === 'cache' ? 'cached' : 'fresh';
+    return `${label}: ${sourceText} ${formatRelativeTime(meta.cachedAt)}`;
+  }
+
+  function renderFigmaCacheStatus() {
+    const parts = [];
+    if (figmaFetchStatus.node) parts.push(describeMeta('Spec', figmaFetchStatus.node));
+    if (figmaFetchStatus.image) parts.push(describeMeta('Image', figmaFetchStatus.image));
+
+    if (parts.length === 0) {
+      figmaCacheStatus.textContent = '';
+      figmaCacheStatus.classList.add('hidden');
+      return;
+    }
+
+    figmaCacheStatus.innerHTML = `<strong>Cache:</strong> ${parts.join(' | ')}`;
+    figmaCacheStatus.classList.remove('hidden');
+  }
 
   mcpConnectBtn.addEventListener('click', () => {
     const token = mcpTokenInput.value.trim();
@@ -246,9 +334,14 @@
   mcpFetchBtn.addEventListener('click', () => {
     const nodeId = mcpNodeIdInput.value.trim();
     if (nodeId) {
-        mcpFetchBtn.disabled = true;
-        mcpFetchBtn.textContent = 'Fetching...';
         fetchFigmaNode(nodeId);
+    }
+  });
+
+  mcpRefreshBtn.addEventListener('click', () => {
+    const nodeId = mcpNodeIdInput.value.trim();
+    if (nodeId) {
+      fetchFigmaNodeWithOptions(nodeId, { forceRefresh: true });
     }
   });
 
