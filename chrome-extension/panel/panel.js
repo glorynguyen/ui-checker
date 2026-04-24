@@ -16,6 +16,7 @@
   const resultsSummary = document.getElementById('results-summary');
   const resultsList = document.getElementById('results-list');
   const copyBtn = document.getElementById('copy-btn');
+  const copyAiBtn = document.getElementById('copy-ai-btn');
   const clearBtn = document.getElementById('clear-btn');
   const selectorInput = document.getElementById('selector-input');
   const selectorBtn = document.getElementById('selector-btn');
@@ -36,6 +37,12 @@
   let figmaFetchStatus = { node: null, image: null };
   let currentFigmaRequestId = 0;
   let figmaFetchPending = 0;
+
+  function setSelectionStatus(message = '', tone = '') {
+    pickStatus.textContent = message;
+    pickStatus.classList.remove('active', 'error', 'success');
+    if (tone) pickStatus.classList.add(tone);
+  }
 
 
 
@@ -121,7 +128,13 @@
 
       if (msg.action === 'ELEMENT_SELECTED') {
         onElementSelected(msg.data);
-      } 
+      } else if (msg.action === 'PICKER_CANCELLED') {
+        setPickerState(false);
+        setSelectionStatus('Picker cancelled.', '');
+      } else if (msg.action === 'SELECTOR_NOT_FOUND') {
+        setPickerState(false);
+        setSelectionStatus(`No match found for "${msg.selector}".`, 'error');
+      }
 
     });
 
@@ -370,6 +383,7 @@
   function queryBySelector() {
     const selector = selectorInput.value.trim();
     if (!selector) return;
+    setSelectionStatus('Looking up selector...', 'active');
     sendMessage({ action: 'QUERY_SELECTOR', selector });
   }
 
@@ -381,17 +395,16 @@
   function setPickerState(active) {
     if (active) {
       pickBtn.disabled = true;
-      pickStatus.textContent = 'Click an element on the page... (Esc to cancel)';
-      pickStatus.classList.add('active');
+      setSelectionStatus('Click an element in the page, or press Esc to cancel.', 'active');
     } else {
       pickBtn.disabled = false;
-      pickStatus.textContent = '';
       pickStatus.classList.remove('active');
     }
   }
 
   function onElementSelected(data) {
     setPickerState(false);
+    setSelectionStatus('Selection ready.', 'success');
     extractedData = data;
 
     elementInfo.classList.remove('hidden');
@@ -500,6 +513,69 @@
   }
 
   compareBtn.addEventListener('click', () => runComparison());
+
+  // --- Copy for AI ---
+  function buildAiPrompt() {
+    if (!lastDiffReport) return null;
+
+    const mismatches = lastDiffReport.results.filter(r => r.status === 'mismatch' || r.status === 'missing');
+    const lines = [];
+
+    lines.push('## UI Checker — AI Fix Request');
+    lines.push('');
+    lines.push('### Element');
+    lines.push(`Selector: ${lastDiffReport.element}`);
+    if (extractedData?.classList) lines.push(`Classes:  ${extractedData.classList}`);
+    lines.push(`Dimensions: ${lastDiffReport.dimensions?.width ?? '?'}px × ${lastDiffReport.dimensions?.height ?? '?'}px`);
+    lines.push('');
+
+    const s = lastDiffReport.summary;
+    lines.push('### Comparison Summary');
+    lines.push(`${s.mismatched} mismatches · ${s.missing ?? 0} missing · ${s.matched} matched (${s.total} total)`);
+    lines.push('');
+
+    if (mismatches.length > 0) {
+      lines.push('### Mismatches');
+      lines.push('| Property | Expected (Figma) | Actual (DOM) | Severity |');
+      lines.push('|---|---|---|---|');
+      for (const r of mismatches) {
+        lines.push(`| ${r.property} | ${r.expected ?? '—'} | ${r.actual ?? '—'} | ${r.severity || r.status} |`);
+      }
+      lines.push('');
+    }
+
+    const figmaRaw = figmaInput.value.trim();
+    if (figmaRaw) {
+      lines.push('### Figma Spec (expected styles)');
+      lines.push('```css');
+      lines.push(figmaRaw);
+      lines.push('```');
+      lines.push('');
+    }
+
+    if (extractedData?.styles) {
+      lines.push('### Live DOM Styles (actual styles)');
+      lines.push('```css');
+      lines.push(Object.entries(extractedData.styles).map(([k, v]) => `${k}: ${v};`).join('\n'));
+      lines.push('```');
+      lines.push('');
+    }
+
+    lines.push('---');
+    lines.push('Paste your component code below and ask the AI to fix the mismatches.');
+    return lines.join('\n');
+  }
+
+  if (copyAiBtn) {
+    copyAiBtn.addEventListener('click', async () => {
+      const prompt = buildAiPrompt();
+      if (!prompt) return;
+      await navigator.clipboard.writeText(prompt);
+      const orig = copyAiBtn.textContent;
+      copyAiBtn.textContent = 'Copied!';
+      setTimeout(() => { copyAiBtn.textContent = orig; }, 1500);
+    });
+  }
 
   // --- Filter results ---
   resultsFilter.addEventListener('input', () => {
@@ -628,7 +704,7 @@
 
   function createResultRow(r) {
     const row = document.createElement('div');
-    row.className = 'result-row';
+    row.className = `result-row result-row--${r.status}`;
 
     const icon = document.createElement('span');
     icon.className = 'result-icon';

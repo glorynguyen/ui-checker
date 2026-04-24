@@ -17,14 +17,6 @@
         <span class="logo-subtext">Figma fidelity inside DevTools</span>
       </div>
     </div>
-    <button id="pick-btn" class="btn btn-primary">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10"></circle>
-        <path d="M12 8v8M8 12h8"></path>
-      </svg>
-      Pick Element
-    </button>
-    <span id="pick-status" class="pick-status"></span>
     <button id="settings-btn" class="btn btn-icon" title="Settings">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="12" r="3"></circle>
@@ -35,21 +27,75 @@
 
   <div class="hero-card section-card">
     <div class="hero-copy">
-      <div class="section-title">Inspect And Compare</div>
-      <p class="section-description">Pick a live component, fetch the matching Figma spec, then review style and visual mismatches in one place.</p>
+      <div class="section-title">Select Live Component</div>
+      <p class="section-description">Start with the DOM node you want to inspect. Picking from the page is the clearest path, and manual selectors stay available when you need them.</p>
     </div>
-    <!-- Selector input -->
-    <div class="selector-row">
-      <input type="text" id="selector-input" class="input-field selector-input" placeholder="Paste CSS selector (e.g. #app > .card)">
-      <button id="selector-btn" class="btn">Select</button>
-    </div>
-  </div>
 
-  <!-- Selected element info -->
-  <div id="element-info" class="section-card element-info hidden">
-    <span class="element-info-label">Selected Element</span>
-    <strong id="element-name"></strong>
-    <span class="text-muted" style="margin-left:auto" id="element-dims"></span>
+    <div class="selection-workflow">
+      <div class="selection-primary-card">
+        <div class="selection-method-badge">Recommended</div>
+        <button id="pick-btn" class="btn btn-primary selection-pick-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M12 8v8M8 12h8"></path>
+          </svg>
+          Pick From Page
+        </button>
+        <p class="selection-helper">We’ll highlight elements in the page so you can click the exact component.</p>
+        <span id="pick-status" class="pick-status" aria-live="polite"></span>
+      </div>
+
+      <div class="selection-divider">
+        <span>Or use a selector</span>
+      </div>
+
+      <div class="selector-block">
+        <label class="field-label" for="selector-input">Manual CSS Selector</label>
+        <div class="selector-row">
+          <input type="text" id="selector-input" class="input-field selector-input" placeholder="Paste CSS selector (e.g. #app > .card)">
+          <button id="selector-btn" class="btn">Select</button>
+        </div>
+        <p class="selector-hint">Helpful for repeated checks or elements that are hard to click.</p>
+      </div>
+    </div>
+
+    <div class="quick-start-guide">
+      <div class="quick-start-header">
+        <span class="quick-start-kicker">First Time Here?</span>
+        <span class="quick-start-title">Quick Walkthrough</span>
+      </div>
+      <div class="quick-start-steps">
+        <div class="quick-start-step">
+          <span class="quick-start-step-num">1</span>
+          <div>
+            <strong>Pick From Page</strong>
+            <p>Click the main button, then choose the live element you want to inspect.</p>
+          </div>
+        </div>
+        <div class="quick-start-step">
+          <span class="quick-start-step-num">2</span>
+          <div>
+            <strong>Paste Or Fetch Figma Spec</strong>
+            <p>Add the matching Figma CSS or use the Figma connection below to pull it in automatically.</p>
+          </div>
+        </div>
+        <div class="quick-start-step">
+          <span class="quick-start-step-num">3</span>
+          <div>
+            <strong>Run Comparison</strong>
+            <p>Review style mismatches first, then use the visual overlay when you need a closer check.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="element-info" class="element-info hidden">
+      <div class="element-info-copy">
+        <span class="element-info-label">Selected Element</span>
+        <strong id="element-name"></strong>
+      </div>
+      <span class="text-muted" id="element-dims"></span>
+    </div>
   </div>
 
   <!-- Settings panel (collapsible) -->
@@ -167,16 +213,22 @@
 
   <!-- Side-by-side panels -->
   <div class="panels">
-    <div class="panel-section">
+    <div class="panel-section panel-section--figma">
       <div class="panel-header">
-        <div class="section-title">Figma Spec</div>
+        <div class="panel-header-row">
+          <div class="section-title">Figma Spec</div>
+          <span class="panel-badge panel-badge--figma">Figma</span>
+        </div>
         <p class="section-description">Paste CSS directly or fill this automatically from the selected Figma node.</p>
       </div>
       <textarea id="figma-input" placeholder="Paste CSS or fetch from Figma..."></textarea>
     </div>
-    <div class="panel-section">
+    <div class="panel-section panel-section--dom">
       <div class="panel-header">
-        <div class="section-title">Live Component</div>
+        <div class="panel-header-row">
+          <div class="section-title">Live Component</div>
+          <span class="panel-badge panel-badge--dom">DOM</span>
+        </div>
         <p class="section-description">Computed styles from the currently selected DOM element appear here.</p>
       </div>
       <pre id="extracted-styles" class="styles-display">Pick an element to extract styles.</pre>
@@ -185,7 +237,13 @@
 
   <!-- Compare button -->
   <div class="actions actions-primary">
-    <button id="compare-btn" class="btn btn-primary" style="flex:1" disabled>Run Comparison</button>
+    <button id="compare-btn" class="btn btn-primary compare-btn" disabled>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="9 11 12 14 22 4"></polyline>
+        <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path>
+      </svg>
+      Run Comparison
+    </button>
   </div>
 
   <!-- Visual Overlay -->
@@ -239,6 +297,12 @@
     <div id="results-list" class="results-list"></div>
     <div class="actions" style="margin-top:16px">
       <button id="copy-btn" class="btn" style="flex:1">Copy Report</button>
+      <button id="copy-ai-btn" class="btn btn-ai" style="flex:1">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+          <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
+        </svg>
+        Copy for AI
+      </button>
       <button id="clear-btn" class="btn">Reset</button>
     </div>
   </div>

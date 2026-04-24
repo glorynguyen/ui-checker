@@ -86,6 +86,7 @@
 
     return {
       element: getElementDescriptor(el),
+      classList: Array.from(el.classList).join(' '),
       figmaId: el.dataset.figmaId || el.getAttribute('data-figma-id') || null,
       dimensions: {
         width: Math.round(rect.width),
