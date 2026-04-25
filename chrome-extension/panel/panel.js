@@ -6,9 +6,12 @@
   const pickStatus = document.getElementById('pick-status');
   const settingsBtn = document.getElementById('settings-btn');
   const settingsPanel = document.getElementById('settings-panel');
+  const selectionEmptyState = document.getElementById('selection-empty-state');
+  const comparisonWorkspace = document.getElementById('comparison-workspace');
   const elementInfo = document.getElementById('element-info');
   const elementName = document.getElementById('element-name');
   const elementDims = document.getElementById('element-dims');
+  const figmaSpecSection = document.getElementById('figma-spec-section');
   const figmaInput = document.getElementById('figma-input');
   const extractedStyles = document.getElementById('extracted-styles');
   const compareBtn = document.getElementById('compare-btn');
@@ -37,11 +40,44 @@
   let figmaFetchStatus = { node: null, image: null };
   let currentFigmaRequestId = 0;
   let figmaFetchPending = 0;
+  let figmaSpecHighlightTimer = null;
 
   function setSelectionStatus(message = '', tone = '') {
     pickStatus.textContent = message;
     pickStatus.classList.remove('active', 'error', 'success');
     if (tone) pickStatus.classList.add(tone);
+  }
+
+  function clearFigmaSpecHighlight() {
+    if (figmaSpecHighlightTimer) {
+      clearTimeout(figmaSpecHighlightTimer);
+      figmaSpecHighlightTimer = null;
+    }
+    figmaSpecSection?.classList.remove('panel-section--highlight');
+  }
+
+  function guideToFigmaSpec(message = 'Next step: paste or fetch the Figma Spec.') {
+    if (!figmaSpecSection || figmaInput.value.trim()) return;
+
+    clearFigmaSpecHighlight();
+    figmaSpecSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    figmaInput.focus({ preventScroll: true });
+    setSelectionStatus(message, 'active');
+
+    // Restart the pulse so repeated picks still draw attention.
+    void figmaSpecSection.offsetWidth;
+    figmaSpecSection.classList.add('panel-section--highlight');
+    figmaSpecHighlightTimer = setTimeout(() => {
+      figmaSpecSection.classList.remove('panel-section--highlight');
+      figmaSpecHighlightTimer = null;
+    }, 2200);
+  }
+
+  function updateSelectionLayout() {
+    const hasSelection = Boolean(extractedData);
+
+    selectionEmptyState?.classList.toggle('hidden', hasSelection);
+    comparisonWorkspace?.classList.toggle('hidden', !hasSelection);
   }
 
 
@@ -78,10 +114,12 @@
         figmaFetchStatus.node = null;
         renderFigmaCacheStatus();
         markFigmaFetchComplete();
+        guideToFigmaSpec('Figma fetch failed. Paste the spec here or try fetching again.');
       } else if (msg.action === 'MCP_NODE_DATA') {
         if (!isActiveFigmaResponse(msg)) return;
         console.log('[Panel] Received MCP Node Data:', msg.data);
         figmaInput.value = JSON.stringify(msg.data, null, 2);
+        clearFigmaSpecHighlight();
         figmaFetchStatus.node = msg.meta || null;
         renderFigmaCacheStatus();
         markFigmaFetchComplete();
@@ -406,6 +444,7 @@
     setPickerState(false);
     setSelectionStatus('Selection ready.', 'success');
     extractedData = data;
+    updateSelectionLayout();
 
     elementInfo.classList.remove('hidden');
     elementName.textContent = data.element;
@@ -415,6 +454,8 @@
     if (data.figmaId) {
         document.getElementById('mcp-node-id').value = data.figmaId;
         fetchFigmaNode(data.figmaId);
+    } else {
+        guideToFigmaSpec();
     }
 
     // Display extracted styles
@@ -436,7 +477,12 @@
   }
 
   // --- Figma input ---
-  figmaInput.addEventListener('input', updateCompareBtn);
+  figmaInput.addEventListener('input', () => {
+    if (figmaInput.value.trim()) {
+      clearFigmaSpecHighlight();
+    }
+    updateCompareBtn();
+  });
 
   function updateCompareBtn() {
     compareBtn.disabled = !(extractedData && figmaInput.value.trim());
@@ -864,6 +910,7 @@
     lastDiffReport = null;
     currentVarMap = {};
     varOverrides = {};
+    clearFigmaSpecHighlight();
     figmaInput.value = '';
     extractedStyles.textContent = 'Pick an element to extract styles.';
     elementInfo.classList.add('hidden');
@@ -872,6 +919,7 @@
     resultsList.textContent = '';
     resultsFilter.value = '';
     compareBtn.disabled = true;
+    updateSelectionLayout();
   });
 
   // --- Variable Mappings ---
@@ -1296,5 +1344,7 @@
     figmaDropZone.appendChild(p1);
     figmaDropZone.appendChild(p2);
   });
+
+  updateSelectionLayout();
 
 })();

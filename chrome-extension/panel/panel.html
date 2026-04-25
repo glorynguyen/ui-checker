@@ -98,6 +98,24 @@
     </div>
   </div>
 
+  <div id="selection-empty-state" class="selection-empty-state section-card">
+    <div class="selection-empty-state-copy">
+      <span class="selection-empty-kicker">Comparison Workspace</span>
+      <h2>Pick an element to unlock the rest of the tools.</h2>
+      <p>Once you choose a live component, we will reveal the Figma spec area, extracted DOM styles, visual overlay, and comparison results in the right order.</p>
+    </div>
+    <div class="selection-empty-state-points">
+      <div class="selection-empty-point">
+        <strong>Focused first step</strong>
+        <span>Start with a real DOM target instead of scanning every panel at once.</span>
+      </div>
+      <div class="selection-empty-point">
+        <strong>Cleaner follow-up flow</strong>
+        <span>The compare workspace appears only when it is actually useful.</span>
+      </div>
+    </div>
+  </div>
+
   <!-- Settings panel (collapsible) -->
   <div id="settings-panel" class="section-card settings-panel hidden">
     <div class="settings-shell">
@@ -212,98 +230,100 @@
   </div>
 
   <!-- Side-by-side panels -->
-  <div class="panels">
-    <div class="panel-section panel-section--figma">
-      <div class="panel-header">
-        <div class="panel-header-row">
-          <div class="section-title">Figma Spec</div>
-          <span class="panel-badge panel-badge--figma">Figma</span>
+  <div id="comparison-workspace" class="comparison-workspace hidden">
+    <div class="panels">
+      <div id="figma-spec-section" class="panel-section panel-section--figma">
+        <div class="panel-header">
+          <div class="panel-header-row">
+            <div class="section-title">Figma Spec</div>
+            <span class="panel-badge panel-badge--figma">Figma</span>
+          </div>
+          <p class="section-description">Paste CSS directly or fill this automatically from the selected Figma node.</p>
         </div>
-        <p class="section-description">Paste CSS directly or fill this automatically from the selected Figma node.</p>
+        <textarea id="figma-input" placeholder="Paste CSS or fetch from Figma..."></textarea>
       </div>
-      <textarea id="figma-input" placeholder="Paste CSS or fetch from Figma..."></textarea>
-    </div>
-    <div class="panel-section panel-section--dom">
-      <div class="panel-header">
-        <div class="panel-header-row">
-          <div class="section-title">Live Component</div>
-          <span class="panel-badge panel-badge--dom">DOM</span>
+      <div class="panel-section panel-section--dom">
+        <div class="panel-header">
+          <div class="panel-header-row">
+            <div class="section-title">Live Component</div>
+            <span class="panel-badge panel-badge--dom">DOM</span>
+          </div>
+          <p class="section-description">Computed styles from the currently selected DOM element appear here.</p>
         </div>
-        <p class="section-description">Computed styles from the currently selected DOM element appear here.</p>
-      </div>
-      <pre id="extracted-styles" class="styles-display">Pick an element to extract styles.</pre>
-    </div>
-  </div>
-
-  <!-- Compare button -->
-  <div class="actions actions-primary">
-    <button id="compare-btn" class="btn btn-primary compare-btn" disabled>
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="9 11 12 14 22 4"></polyline>
-        <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path>
-      </svg>
-      Run Comparison
-    </button>
-  </div>
-
-  <!-- Visual Overlay -->
-  <div id="overlay-section" class="overlay-section hidden">
-    <div class="overlay-header">
-      <div class="section-title" style="margin:0">Visual Overlay</div>
-      <div class="overlay-controls">
-        <button id="overlay-capture-btn" class="btn btn-sm">Capture</button>
-        <div class="overlay-mode-group">
-          <button class="btn btn-sm overlay-mode-btn active" data-mode="onion">Onion</button>
-          <button class="btn btn-sm overlay-mode-btn" data-mode="side-by-side">Side</button>
-          <button class="btn btn-sm overlay-mode-btn" data-mode="diff">Diff</button>
-        </div>
+        <pre id="extracted-styles" class="styles-display">Pick an element to extract styles.</pre>
       </div>
     </div>
 
-    <div id="figma-drop-zone" class="figma-drop-zone">
-      <p>Drop or paste Figma design</p>
-      <p class="text-muted">Or click to upload</p>
-      <input type="file" id="figma-image-input" accept="image/*" hidden>
-    </div>
-
-    <div id="overlay-slider-row" class="overlay-slider-row hidden">
-      <label>Opacity</label>
-      <input type="range" id="overlay-opacity" min="0" max="100" value="50" class="overlay-slider">
-      <span id="overlay-opacity-val">50%</span>
-    </div>
-
-    <div id="diff-threshold-row" class="overlay-slider-row hidden">
-      <label>Sensitivity</label>
-      <input type="range" id="diff-threshold" min="0" max="50" value="10" class="overlay-slider">
-      <span id="diff-threshold-val">10</span>
-    </div>
-
-    <div id="overlay-canvas-area" class="overlay-canvas-area hidden">
-      <div id="overlay-canvases" class="overlay-canvases">
-        <canvas id="overlay-canvas" class="overlay-canvas"></canvas>
-      </div>
-      <div id="overlay-match-info" class="overlay-match-info hidden"></div>
-    </div>
-  </div>
-
-  <!-- Results -->
-  <div id="results-section" class="results-section hidden">
-    <div id="results-summary" class="results-summary">
-      <!-- Injected by JS -->
-    </div>
-    <div class="results-filter-row">
-      <input type="text" id="results-filter" class="input-field results-filter" placeholder="Search properties...">
-    </div>
-    <div id="results-list" class="results-list"></div>
-    <div class="actions" style="margin-top:16px">
-      <button id="copy-btn" class="btn" style="flex:1">Copy Report</button>
-      <button id="copy-ai-btn" class="btn btn-ai" style="flex:1">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-          <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
+    <!-- Compare button -->
+    <div class="actions actions-primary">
+      <button id="compare-btn" class="btn btn-primary compare-btn" disabled>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="9 11 12 14 22 4"></polyline>
+          <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path>
         </svg>
-        Copy for AI
+        Run Comparison
       </button>
-      <button id="clear-btn" class="btn">Reset</button>
+    </div>
+
+    <!-- Visual Overlay -->
+    <div id="overlay-section" class="overlay-section hidden">
+      <div class="overlay-header">
+        <div class="section-title" style="margin:0">Visual Overlay</div>
+        <div class="overlay-controls">
+          <button id="overlay-capture-btn" class="btn btn-sm">Capture</button>
+          <div class="overlay-mode-group">
+            <button class="btn btn-sm overlay-mode-btn active" data-mode="onion">Onion</button>
+            <button class="btn btn-sm overlay-mode-btn" data-mode="side-by-side">Side</button>
+            <button class="btn btn-sm overlay-mode-btn" data-mode="diff">Diff</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="figma-drop-zone" class="figma-drop-zone">
+        <p>Drop or paste Figma design</p>
+        <p class="text-muted">Or click to upload</p>
+        <input type="file" id="figma-image-input" accept="image/*" hidden>
+      </div>
+
+      <div id="overlay-slider-row" class="overlay-slider-row hidden">
+        <label>Opacity</label>
+        <input type="range" id="overlay-opacity" min="0" max="100" value="50" class="overlay-slider">
+        <span id="overlay-opacity-val">50%</span>
+      </div>
+
+      <div id="diff-threshold-row" class="overlay-slider-row hidden">
+        <label>Sensitivity</label>
+        <input type="range" id="diff-threshold" min="0" max="50" value="10" class="overlay-slider">
+        <span id="diff-threshold-val">10</span>
+      </div>
+
+      <div id="overlay-canvas-area" class="overlay-canvas-area hidden">
+        <div id="overlay-canvases" class="overlay-canvases">
+          <canvas id="overlay-canvas" class="overlay-canvas"></canvas>
+        </div>
+        <div id="overlay-match-info" class="overlay-match-info hidden"></div>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div id="results-section" class="results-section hidden">
+      <div id="results-summary" class="results-summary">
+        <!-- Injected by JS -->
+      </div>
+      <div class="results-filter-row">
+        <input type="text" id="results-filter" class="input-field results-filter" placeholder="Search properties...">
+      </div>
+      <div id="results-list" class="results-list"></div>
+      <div class="actions" style="margin-top:16px">
+        <button id="copy-btn" class="btn" style="flex:1">Copy Report</button>
+        <button id="copy-ai-btn" class="btn btn-ai" style="flex:1">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+            <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
+          </svg>
+          Copy for AI
+        </button>
+        <button id="clear-btn" class="btn">Reset</button>
+      </div>
     </div>
   </div>
 
