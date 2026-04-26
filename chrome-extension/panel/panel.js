@@ -488,6 +488,28 @@
     compareBtn.disabled = !(extractedData && figmaInput.value.trim());
   }
 
+  function openVarEditor(_anchorEl, property, varInfo) {
+    const currentValue = varOverrides[property] ?? varInfo.fallback ?? '';
+    const message = [
+      `Override ${varInfo.varName} for ${property}.`,
+      'Leave blank to clear the override and fall back to the Figma value.'
+    ].join('\n');
+    const nextValue = window.prompt(message, currentValue);
+
+    if (nextValue === null) return;
+
+    const trimmed = nextValue.trim();
+    if (trimmed) {
+      varOverrides[property] = trimmed;
+    } else {
+      delete varOverrides[property];
+    }
+
+    if (extractedData && figmaInput.value.trim()) {
+      runComparison();
+    }
+  }
+
   // --- Settings ---
   settingsBtn.addEventListener('click', () => {
     settingsPanel.classList.toggle('hidden');
@@ -534,20 +556,36 @@
 
     const parsed = FigmaParser.parse(figmaInput.value);
     currentVarMap = parsed.varMap;
+    const rootFontSize = extractedData.rootFontSize || 16;
 
     // Apply user overrides to styles before normalizing
     const figmaStyles = { ...parsed.styles };
+    const rawFigmaStyles = { ...parsed.rawStyles };
+    const sourceDeclarations = { ...parsed.sourceDeclarations };
     for (const [prop, val] of Object.entries(varOverrides)) {
       if (prop in figmaStyles) {
         figmaStyles[prop] = val;
+        rawFigmaStyles[prop] = val;
+        sourceDeclarations[prop] = `${prop}: ${val};`;
       }
     }
 
-    const normalizedFigma = Normalizer.normalize(figmaStyles);
-    const normalizedBrowser = Normalizer.normalize(extractedData.styles);
+    const normalizedFigma = Normalizer.normalize(figmaStyles, rootFontSize);
+    const normalizedBrowser = Normalizer.normalize(extractedData.styles, rootFontSize);
 
     const tolerance = getTolerance();
-    const report = DiffEngine.compare(normalizedFigma, normalizedBrowser, tolerance);
+    const baseReport = DiffEngine.compare(normalizedFigma, normalizedBrowser, tolerance);
+    const report = {
+      ...baseReport,
+      results: baseReport.results.map((result) => {
+        const sourceExpected = rawFigmaStyles[result.property] ?? result.expected;
+        return {
+          ...result,
+          sourceExpected,
+          sourceDeclaration: sourceDeclarations[result.property] || `${result.property}: ${sourceExpected};`
+        };
+      })
+    };
 
     lastDiffReport = {
       ...report,
@@ -585,7 +623,7 @@
       lines.push('| Property | Expected (Figma) | Actual (DOM) | Severity |');
       lines.push('|---|---|---|---|');
       for (const r of mismatches) {
-        lines.push(`| ${r.property} | ${r.expected ?? '—'} | ${r.actual ?? '—'} | ${r.severity || r.status} |`);
+        lines.push(`| ${r.property} | ${r.sourceExpected ?? r.expected ?? '—'} | ${r.actual ?? '—'} | ${r.severity || r.status} |`);
       }
       lines.push('');
     }
@@ -802,7 +840,7 @@
       label.className = 'result-label';
       label.textContent = 'exp';
       expectedCol.appendChild(label);
-      expectedCol.appendChild(createValueElement(r.expected, ''));
+      expectedCol.appendChild(createValueElement(r.sourceExpected ?? r.expected, ''));
     }
     row.appendChild(expectedCol);
 
@@ -832,7 +870,7 @@
         fixBtn.textContent = 'Fix';
         fixBtn.addEventListener('click', (e) => {
           e.stopPropagation();
-          navigator.clipboard.writeText(`${r.property}: ${r.expected};`).then(() => {
+          navigator.clipboard.writeText(r.sourceDeclaration || `${r.property}: ${r.sourceExpected ?? r.expected};`).then(() => {
             fixBtn.textContent = 'Copied!';
             fixBtn.classList.add('btn-success');
             setTimeout(() => { fixBtn.textContent = 'Fix'; fixBtn.classList.remove('btn-success'); }, 1000);
@@ -891,7 +929,7 @@
       md += `| Property | Expected (Figma) | Actual (Browser) | Severity |\n`;
       md += `|----------|-----------------|------------------|----------|\n`;
       for (const m of mismatches) {
-        md += `| ${m.property} | ${m.expected} | ${m.actual ?? 'n/a'} | ${m.severity} |\n`;
+        md += `| ${m.property} | ${m.sourceExpected ?? m.expected} | ${m.actual ?? 'n/a'} | ${m.severity} |\n`;
       }
       md += '\n';
     }

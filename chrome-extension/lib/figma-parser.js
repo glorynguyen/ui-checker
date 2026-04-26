@@ -3,7 +3,7 @@
 
 const FigmaParser = {
   parse(input) {
-    if (!input) return { styles: {}, varMap: {} };
+    if (!input) return { styles: {}, varMap: {}, rawStyles: {}, sourceDeclarations: {} };
 
     // Handle JSON object (direct from API)
     if (typeof input === 'object' && input !== null) {
@@ -27,51 +27,85 @@ const FigmaParser = {
     const doc = node.document || node;
     const styles = {};
     const varMap = {};
+    const rawStyles = {};
+    const sourceDeclarations = {};
+
+    const setStyle = (prop, value) => {
+      styles[prop] = value;
+      rawStyles[prop] = value;
+      sourceDeclarations[prop] = `${prop}: ${value};`;
+    };
 
     // 1. Sizing
     const box = doc.absoluteBoundingBox || doc.boundingBox;
     if (box) {
-      styles['width'] = `${Math.round(box.width)}px`;
-      styles['height'] = `${Math.round(box.height)}px`;
+      setStyle('width', `${Math.round(box.width)}px`);
+      setStyle('height', `${Math.round(box.height)}px`);
     }
 
     // 2. Background/Color
-    if (Array.isArray(doc.fills) && doc.fills.length > 0) {
-      const fill = doc.fills[0];
-      if (fill.type === 'SOLID') {
-        const color = this._figmaColorToRgb(fill.color, fill.opacity);
-        styles['background-color'] = color;
+    const fill = this._getPrimarySolidFill(doc.fills);
+    if (fill) {
+      const combinedOpacity = this._combineOpacity(fill.opacity, doc.opacity);
+      const color = this._figmaColorToRgb(fill.color, combinedOpacity);
+      if (this._isTextNode(doc)) {
+        setStyle('color', color);
+      } else {
+        setStyle('background-color', color);
       }
     }
 
     // 3. Typography
     if (doc.style) {
       const s = doc.style;
-      if (s.fontFamily) styles['font-family'] = s.fontFamily;
-      if (s.fontSize) styles['font-size'] = `${s.fontSize}px`;
-      if (s.fontWeight) styles['font-weight'] = s.fontWeight.toString();
-      if (s.lineHeightPx) styles['line-height'] = `${Math.round(s.lineHeightPx)}px`;
-      if (s.letterSpacing) styles['letter-spacing'] = `${s.letterSpacing}px`;
-      if (s.textAlignHorizontal) styles['text-align'] = s.textAlignHorizontal.toLowerCase();
+      if (s.fontFamily) setStyle('font-family', s.fontFamily);
+      if (s.fontSize) setStyle('font-size', `${s.fontSize}px`);
+      if (s.fontWeight) setStyle('font-weight', s.fontWeight.toString());
+      if (s.lineHeightPx) setStyle('line-height', `${Math.round(s.lineHeightPx)}px`);
+      if (s.letterSpacing) setStyle('letter-spacing', `${s.letterSpacing}px`);
+      if (s.textAlignHorizontal) setStyle('text-align', s.textAlignHorizontal.toLowerCase());
     }
 
     // 4. Border Radius
     if (doc.cornerRadius !== undefined) {
       const r = `${doc.cornerRadius}px`;
-      styles['border-top-left-radius'] = r;
-      styles['border-top-right-radius'] = r;
-      styles['border-bottom-right-radius'] = r;
-      styles['border-bottom-left-radius'] = r;
+      setStyle('border-top-left-radius', r);
+      setStyle('border-top-right-radius', r);
+      setStyle('border-bottom-right-radius', r);
+      setStyle('border-bottom-left-radius', r);
     }
 
     // 5. Padding/Gap (Auto Layout)
-    if (doc.paddingTop !== undefined) styles['padding-top'] = `${doc.paddingTop}px`;
-    if (doc.paddingRight !== undefined) styles['padding-right'] = `${doc.paddingRight}px`;
-    if (doc.paddingBottom !== undefined) styles['padding-bottom'] = `${doc.paddingBottom}px`;
-    if (doc.paddingLeft !== undefined) styles['padding-left'] = `${doc.paddingLeft}px`;
-    if (doc.itemSpacing !== undefined) styles['gap'] = `${doc.itemSpacing}px`;
+    if (doc.paddingTop !== undefined) setStyle('padding-top', `${doc.paddingTop}px`);
+    if (doc.paddingRight !== undefined) setStyle('padding-right', `${doc.paddingRight}px`);
+    if (doc.paddingBottom !== undefined) setStyle('padding-bottom', `${doc.paddingBottom}px`);
+    if (doc.paddingLeft !== undefined) setStyle('padding-left', `${doc.paddingLeft}px`);
+    if (doc.itemSpacing !== undefined) setStyle('gap', `${doc.itemSpacing}px`);
 
-    return { styles, varMap };
+    return { styles, varMap, rawStyles, sourceDeclarations };
+  },
+
+  _getPrimarySolidFill(fills) {
+    if (!Array.isArray(fills)) return null;
+
+    for (const fill of fills) {
+      if (!fill || fill.visible === false) continue;
+      if (fill.type === 'SOLID') {
+        return fill;
+      }
+    }
+
+    return null;
+  },
+
+  _isTextNode(doc) {
+    return doc?.type === 'TEXT';
+  },
+
+  _combineOpacity(fillOpacity, nodeOpacity) {
+    const fillAlpha = typeof fillOpacity === 'number' ? fillOpacity : 1;
+    const nodeAlpha = typeof nodeOpacity === 'number' ? nodeOpacity : 1;
+    return fillAlpha * nodeAlpha;
   },
 
   _figmaColorToRgb(c, opacity = 1) {
@@ -83,7 +117,7 @@ const FigmaParser = {
   },
 
   _parseCSSText(cssText) {
-    if (!cssText || !cssText.trim()) return { styles: {}, varMap: {} };
+    if (!cssText || !cssText.trim()) return { styles: {}, varMap: {}, rawStyles: {}, sourceDeclarations: {} };
 
     // Strip CSS comments
     let cleaned = cssText.replace(/\/\*[\s\S]*?\*\//g, '');
@@ -96,6 +130,8 @@ const FigmaParser = {
 
     const styles = {};
     const varMap = {};
+    const rawStyles = {};
+    const sourceDeclarations = {};
 
     for (const decl of declarations) {
       const colonIdx = decl.indexOf(':');
@@ -110,22 +146,28 @@ const FigmaParser = {
 
       // Expand shorthands
       const expanded = this._expandShorthand(prop, value);
+      const expandedRaw = varInfo ? null : this._expandShorthand(prop, rawValue);
 
       // Map var info to each expanded property
-      if (varInfo) {
-        for (const expandedProp of Object.keys(expanded)) {
+      for (const expandedProp of Object.keys(expanded)) {
+        if (varInfo) {
           varMap[expandedProp] = {
             varName: varInfo.varName,
             fallback: varInfo.fallback,
             original: rawValue
           };
         }
+
+        rawStyles[expandedProp] = varInfo
+          ? rawValue
+          : (expandedRaw?.[expandedProp] ?? rawValue);
+        sourceDeclarations[expandedProp] = `${expandedProp}: ${rawStyles[expandedProp]};`;
       }
 
       Object.assign(styles, expanded);
     }
 
-    return { styles, varMap };
+    return { styles, varMap, rawStyles, sourceDeclarations };
   },
 
   // Extract var(--name, fallback) info and resolve to fallback

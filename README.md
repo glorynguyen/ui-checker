@@ -72,6 +72,30 @@ DevTools Panel  -->  Service Worker  -->  https://api.figma.com/v1/...
 - `chrome-extension/content/` — Content script for element picking and style extraction.
 - `chrome-extension/lib/` — Shared logic for Figma API client, CSS parsing, normalizing, and diffing.
 
+## Testing
+
+This repo now uses Node's built-in test runner, so you can run unit tests without adding Jest or Vitest.
+
+- `npm test` — run the unit test suite
+- `npm run test:watch` — rerun tests on file changes
+- `npm run test:coverage` — run tests with a coverage report across shared libs and the content script
+
+### Coverage Management
+
+The coverage script is intentionally configurable so you can manage what counts and how strict it should be.
+
+- `npm run test:coverage -- --include=chrome-extension/lib/*.js`
+- `npm run test:coverage -- --include=chrome-extension/lib/*.js --include=chrome-extension/content/*.js --exclude=chrome-extension/lib/pixel-diff.js`
+- `npm run test:coverage -- --lines=90 --functions=90 --branches=80`
+- `npm run test:coverage -- test/figma-parser.test.js`
+
+You can also drive the same settings with environment variables:
+
+- `TEST_COVERAGE_INCLUDE=chrome-extension/lib/*.js npm run test:coverage`
+- `TEST_COVERAGE_LINES=90 TEST_COVERAGE_FUNCTIONS=90 TEST_COVERAGE_BRANCHES=80 npm run test:coverage`
+
+By default, `npm run test:coverage` scopes coverage to `chrome-extension/lib/*.js` and `chrome-extension/content/*.js`, which keeps the report focused on the unit-testable core logic and the content-script runtime path we can realistically mock. You can broaden that include list whenever you want to start measuring panel or background files too.
+
 ---
 
 ## Troubleshooting

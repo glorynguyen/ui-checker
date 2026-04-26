@@ -4,6 +4,9 @@
   "private": true,
   "description": "Compare rendered browser styles against Figma Dev Mode CSS specs to catch spacing, typography, and color discrepancies.",
   "scripts": {
+    "test": "node scripts/run-tests.mjs",
+    "test:watch": "node scripts/run-tests.mjs watch",
+    "test:coverage": "node scripts/run-tests.mjs coverage",
     "release": "semantic-release"
   },
   "devDependencies": {

@@ -77,6 +77,7 @@
 
   function extractStyles(el) {
     const computed = window.getComputedStyle(el);
+    const rootComputed = window.getComputedStyle(document.documentElement);
     const rect = el.getBoundingClientRect();
     const styles = {};
 
@@ -88,6 +89,7 @@
       element: getElementDescriptor(el),
       classList: Array.from(el.classList).join(' '),
       figmaId: el.dataset.figmaId || el.getAttribute('data-figma-id') || null,
+      rootFontSize: parseFloat(rootComputed.fontSize) || 16,
       dimensions: {
         width: Math.round(rect.width),
         height: Math.round(rect.height)
