@@ -27,6 +27,9 @@ jobs:
           npm ci
           cd vscode-bridge && npm ci
 
+      - name: Build bridge
+        run: npm run build:bridge
+
       - name: Run Tests
         run: |
           cd vscode-bridge && npm run test:coverage

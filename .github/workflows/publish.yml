@@ -20,6 +20,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build extension
+        run: npm run build:extension
+
       - name: Zip Extension
         run: |
           cd chrome-extension
