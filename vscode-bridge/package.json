@@ -9,7 +9,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/glorynguyen/ui-checker"
+    "url": "https://github.com/glorynguyen/ui-checker.git"
   },
   "engines": {
     "vscode": "^1.75.0"
@@ -24,7 +24,8 @@
   "scripts": {
     "package": "vsce package",
     "test": "tsx test-search.ts",
-    "test:coverage": "c8 tsx test-search.ts"
+    "test:coverage": "c8 tsx test-search.ts",
+    "release": "semantic-release"
   },
   "contributes": {
     "commands": [
@@ -55,6 +56,14 @@
   "devDependencies": {
     "@vscode/vsce": "^3.9.1",
     "c8": "^11.0.0",
-    "tsx": "^4.7.2"
+    "tsx": "^4.7.2",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/commit-analyzer": "^13.0.0",
+    "@semantic-release/git": "^10.0.0",
+    "@semantic-release/github": "^11.0.6",
+    "@semantic-release/npm": "^13.1.5",
+    "@semantic-release/release-notes-generator": "^14.1.0",
+    "semantic-release": "^24.2.9",
+    "semantic-release-vsce": "^6.1.3"
   }
 }
