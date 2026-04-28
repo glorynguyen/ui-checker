@@ -135,6 +135,17 @@
           bridgeBadge.textContent = 'Bridge: Offline';
           bridgeBadge.className = 'status-badge';
         }
+      } else if (msg.action === 'BRIDGE_ERROR') {
+        const searchingButtons = document.querySelectorAll('.bridge-btn.loading, #header-locate-btn.loading');
+        searchingButtons.forEach(btn => {
+          btn.classList.remove('loading');
+          if (btn.id === 'header-locate-btn') {
+            btn.textContent = 'Locate in Editor';
+          } else {
+            btn.textContent = 'Locate';
+          }
+        });
+        setSelectionStatus('VS Code Bridge not found. Is the extension installed?', 'error');
       } else if (msg.action === 'SELECTOR_RESULTS') {
         console.log('[Panel] Bridge found matches:', msg.matches);
         

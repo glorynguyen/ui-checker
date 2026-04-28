@@ -10,6 +10,7 @@ A Chrome DevTools extension that helps frontend developers catch visual discrepa
 - **Smart URL Parsing**: Paste a full Figma URL and the tool automatically extracts the File Key and Node ID.
 - **Visual Element Picker**: Hover-highlight and click-select elements on your page to extract 40+ computed styles.
 - **One-Click Fixes**: Click the "Fix" button next to any mismatch to copy the correct Figma CSS to your clipboard.
+- **VS Code Integration**: Use the [UI Checker Bridge](https://marketplace.visualstudio.com/items?itemName=VinhNguyen-Vincent.ui-checker-bridge) extension to instantly jump from a browser element to its source code in VS Code.
 - **CSS Variable Support**: Detects `var()` syntax, displays variable names, and allows overriding fallbacks.
 - **Visual Overlay**: Onion-skin, side-by-side, and pixel-diff heatmaps to catch compositional issues.
 

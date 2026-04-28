@@ -19,6 +19,7 @@ Ship UI that matches the design without relying on eyeballing. The extension giv
 | Core style diff workflow | Implemented | Element picker, selector-based selection, style extraction, parser, normalizer, diff engine, grouped results, copyable report |
 | CSS variable workflow | Implemented | `var()` parsing, fallback display, override editing, save/load/import/export mappings |
 | Visual overlay comparison | Implemented | Element capture, Figma image upload/paste, onion-skin, side-by-side, pixel diff heatmap |
+| VS Code Bridge | Implemented | Local WebSocket bridge, smart search, and marketplace extension |
 | Figma API integration | Partially implemented | Personal access token auth, file key + node URL parsing, node fetch, image fetch, tab sync, short-term local cache |
 | Design token validation | Not implemented | No token import, token coverage, or token suggestions found |
 | AI vision comparison | Not implemented | No model integration or screenshot-to-LLM flow found |
@@ -56,6 +57,13 @@ Ship UI that matches the design without relying on eyeballing. The extension giv
 - Side-by-side comparison view
 - Pixel-diff mode with configurable sensitivity and match percentage output
 - Auto-fetch of a Figma-rendered node image when Figma node data is fetched successfully
+
+### VS Code Integration (Bridge)
+
+- Dedicated [VS Code Extension](https://marketplace.visualstudio.com/items?itemName=VinhNguyen-Vincent.ui-checker-bridge) for navigation
+- Local WebSocket server (port 3000) for browser-to-editor communication
+- Smart search algorithm with utility class filtering (Tailwind-aware)
+- High-confidence matching using IDs, unique classes, and active file focus
 
 ---
 

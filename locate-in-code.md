@@ -22,7 +22,7 @@ graph LR
 
 1.  **The Client (Chrome Extension):** Extracts CSS selectors and metadata from the DOM.
 2.  **The Relay (Service Worker):** Maintains a persistent WebSocket connection to the local machine.
-3.  **The Server (VS Code Extension):** A local WebSocket server (default port `3000`) that has full access to the project filesystem.
+3.  **The Server (VS Code Extension):** A local WebSocket server (default port `3000`) that has full access to the project filesystem. Install it from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=VinhNguyen-Vincent.ui-checker-bridge).
 
 ---
 

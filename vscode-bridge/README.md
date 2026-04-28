@@ -11,7 +11,7 @@ Connect your browser-based UI inspection tools directly to your VS Code workspac
 
 ## 🛠 Setup
 
-1. Install this extension.
+1. **Install from Marketplace:** Search for [**UI Checker Bridge**](https://marketplace.visualstudio.com/items?itemName=VinhNguyen-Vincent.ui-checker-bridge) in the VS Code Extensions view or click the link.
 2. Ensure you have the **Figma CSS Diff** Chrome extension installed.
 3. The bridge starts automatically on port `3000`. You can change this in VS Code settings if needed.
 
