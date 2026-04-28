@@ -1,12 +1,37 @@
-function createMockElement({
+export interface MockElement {
+  tagName: string;
+  id: string;
+  classList: {
+    length: number;
+    [Symbol.iterator](): IterableIterator<string>;
+  };
+  dataset: Record<string, string>;
+  style: any;
+  removeCalled: boolean;
+  getAttribute(name: string): string | null;
+  getBoundingClientRect(): {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    right: number;
+    bottom: number;
+  };
+  remove(): void;
+  __computedStyles: Record<string, string>;
+  appendChild?: (node: any) => void;
+  textContent?: string;
+}
+
+export function createMockElement({
   tagName = 'DIV',
   id = '',
-  classNames = [],
-  dataset = {},
-  attributes = {},
+  classNames = [] as string[],
+  dataset = {} as Record<string, string>,
+  attributes = {} as Record<string, string>,
   rect = { left: 10, top: 20, width: 120, height: 48 },
-  computedStyles = {}
-} = {}) {
+  computedStyles = {} as Record<string, string>
+} = {}): MockElement {
   const classList = {
     length: classNames.length,
     [Symbol.iterator]: function* iterator() {
@@ -21,7 +46,7 @@ function createMockElement({
     dataset,
     style: {},
     removeCalled: false,
-    getAttribute(name) {
+    getAttribute(name: string) {
       return attributes[name] ?? null;
     },
     getBoundingClientRect() {
@@ -38,11 +63,11 @@ function createMockElement({
   };
 }
 
-function createContentScriptSandbox({ selectorMap = {}, rootFontSize = '16px' } = {}) {
-  const listeners = new Map();
-  const messageListeners = [];
-  const sentMessages = [];
-  const appendedNodes = [];
+export function createContentScriptSandbox({ selectorMap = {} as Record<string, MockElement>, rootFontSize = '16px' } = {}) {
+  const listeners = new Map<string, any>();
+  const messageListeners: any[] = [];
+  const sentMessages: any[] = [];
+  const appendedNodes: any[] = [];
 
   const documentElement = createMockElement({
     tagName: 'HTML',
@@ -56,28 +81,28 @@ function createContentScriptSandbox({ selectorMap = {}, rootFontSize = '16px' } 
     createElement() {
       return createMockElement();
     },
-    addEventListener(type, handler) {
+    addEventListener(type: string, handler: any) {
       listeners.set(type, handler);
     },
-    removeEventListener(type) {
+    removeEventListener(type: string) {
       listeners.delete(type);
     },
-    querySelector(selector) {
+    querySelector(selector: string) {
       return selectorMap[selector] ?? null;
     }
   };
 
-  documentElement.appendChild = (node) => {
+  documentElement.appendChild = (node: any) => {
     appendedNodes.push(node);
   };
 
   const chrome = {
     runtime: {
-      sendMessage(message) {
+      sendMessage(message: any) {
         sentMessages.push(message);
       },
       onMessage: {
-        addListener(listener) {
+        addListener(listener: any) {
           messageListeners.push(listener);
         }
       }
@@ -90,10 +115,10 @@ function createContentScriptSandbox({ selectorMap = {}, rootFontSize = '16px' } 
     scrollX: 5,
     scrollY: 8,
     devicePixelRatio: 2,
-    getComputedStyle(target) {
+    getComputedStyle(target: MockElement) {
       return {
         fontSize: target === documentElement ? rootFontSize : undefined,
-        getPropertyValue(property) {
+        getPropertyValue(property: string) {
           return target.__computedStyles?.[property] ?? '';
         }
       };
@@ -112,8 +137,3 @@ function createContentScriptSandbox({ selectorMap = {}, rootFontSize = '16px' } 
     sentMessages
   };
 }
-
-module.exports = {
-  createMockElement,
-  createContentScriptSandbox
-};

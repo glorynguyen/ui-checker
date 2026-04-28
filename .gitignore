@@ -1,6 +1,14 @@
 node_modules/
+dist/
+coverage/
+.c8_output/
+.nyc_output/
 extension.zip
 *.crx
 *.pem
 .DS_Store
 *.vsix
+*.log
+npm-debug.log*
+.env
+.env.*

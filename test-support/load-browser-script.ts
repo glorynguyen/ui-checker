@@ -1,10 +1,13 @@
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
+import fs from 'node:fs';
+import path from 'node:path';
+import vm from 'node:vm';
+import { fileURLToPath } from 'node:url';
 
-function createBrowserSandbox(overrides = {}) {
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+export function createBrowserSandbox(overrides: any = {}) {
   const windowOverrides = overrides.window || {};
-  const sandbox = {
+  const sandbox: any = {
     console,
     setTimeout,
     clearTimeout,
@@ -22,7 +25,7 @@ function createBrowserSandbox(overrides = {}) {
   return sandbox;
 }
 
-function loadBrowserScript(relativePath, exportNames = [], sandbox = createBrowserSandbox()) {
+export function loadBrowserScript(relativePath: string, exportNames: string[] = [], sandbox: any = createBrowserSandbox()) {
   const absolutePath = path.resolve(__dirname, '..', relativePath);
   const source = fs.readFileSync(absolutePath, 'utf8');
   vm.runInNewContext(source, sandbox, { filename: absolutePath });
@@ -31,13 +34,8 @@ function loadBrowserScript(relativePath, exportNames = [], sandbox = createBrows
     return sandbox;
   }
 
-  return exportNames.reduce((exportsMap, name) => {
+  return exportNames.reduce((exportsMap: any, name: string) => {
     exportsMap[name] = sandbox[name];
     return exportsMap;
   }, {});
 }
-
-module.exports = {
-  createBrowserSandbox,
-  loadBrowserScript
-};

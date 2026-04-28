@@ -1,20 +1,45 @@
 // Diff Engine — compares two normalized style objects and produces a
 // structured diff report with severity classification.
 
-const DiffEngine = {
+export interface Tolerance {
+  spacing?: number;
+  color?: number;
+  borderRadius?: number;
+}
+
+export interface DiffResult {
+  property: string;
+  status: 'match' | 'mismatch' | 'missing';
+  expected: string | null;
+  actual: string | null;
+  severity?: 'major' | 'minor';
+  note?: string;
+}
+
+export interface DiffSummary {
+  total: number;
+  matched: number;
+  mismatched: number;
+  missing: number;
+}
+
+export interface DiffReport {
+  summary: DiffSummary;
+  results: DiffResult[];
+}
+
+export const DiffEngine = {
   defaultTolerance: {
     spacing: 2,      // ±px
     color: 5,        // ±per channel
     borderRadius: 2  // ±px
   },
 
-  compare(expected, actual, tolerance = {}) {
+  compare(expected: Record<string, string>, actual: Record<string, string>, tolerance: Tolerance = {}): DiffReport {
     const tol = { ...this.defaultTolerance, ...tolerance };
-    const results = [];
+    const results: DiffResult[] = [];
 
     // Compare all properties from expected (Figma)
-    const allProps = new Set([...Object.keys(expected), ...Object.keys(actual)]);
-    // Only diff properties that exist in expected
     for (const prop of Object.keys(expected)) {
       const exp = expected[prop];
       const act = actual[prop] !== undefined ? actual[prop] : null;
@@ -64,7 +89,7 @@ const DiffEngine = {
     };
   },
 
-  _compareWithTolerance(prop, expected, actual, tolerance) {
+  _compareWithTolerance(prop: string, expected: string, actual: string, tolerance: Required<Tolerance>) {
     // Color comparison
     if (this._isColorProperty(prop)) {
       return this._compareColors(expected, actual, tolerance.color);
@@ -80,7 +105,7 @@ const DiffEngine = {
       // Subpixel — negligible
       if (diff < 1) {
         return {
-          status: 'match',
+          status: 'match' as const,
           expected,
           actual,
           note: 'subpixel rounding'
@@ -93,7 +118,7 @@ const DiffEngine = {
 
       if (tol > 0 && diff <= tol) {
         return {
-          status: 'match',
+          status: 'match' as const,
           expected,
           actual,
           note: `within ±${tol}px tolerance`
@@ -102,28 +127,28 @@ const DiffEngine = {
 
       // Classify severity
       const severity = this._classifyNumericSeverity(prop, diff);
-      return { status: 'mismatch', expected, actual, severity };
+      return { status: 'mismatch' as const, expected, actual, severity };
     }
 
     // String comparison — exact mismatch
     return {
-      status: 'mismatch',
+      status: 'mismatch' as const,
       expected,
       actual,
-      severity: 'major'
+      severity: 'major' as const
     };
   },
 
-  _compareColors(expected, actual, channelTolerance) {
+  _compareColors(expected: string, actual: string, channelTolerance: number) {
     const expRgb = this._parseRgb(expected);
     const actRgb = this._parseRgb(actual);
 
     if (!expRgb || !actRgb) {
       return {
-        status: expected === actual ? 'match' : 'mismatch',
+        status: expected === actual ? 'match' as const : 'mismatch' as const,
         expected,
         actual,
-        severity: 'major'
+        severity: 'major' as const
       };
     }
 
@@ -133,12 +158,12 @@ const DiffEngine = {
     const maxDiff = Math.max(dr, dg, db);
 
     if (maxDiff === 0) {
-      return { status: 'match', expected, actual };
+      return { status: 'match' as const, expected, actual };
     }
 
     if (maxDiff <= channelTolerance) {
       return {
-        status: 'match',
+        status: 'match' as const,
         expected,
         actual,
         note: `within ±${channelTolerance} color tolerance`
@@ -146,35 +171,35 @@ const DiffEngine = {
     }
 
     return {
-      status: 'mismatch',
+      status: 'mismatch' as const,
       expected,
       actual,
-      severity: maxDiff > 10 ? 'major' : 'minor'
+      severity: maxDiff > 10 ? 'major' as const : 'minor' as const
     };
   },
 
-  _parseRgb(value) {
+  _parseRgb(value: string) {
     const m = value.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
     if (!m) return null;
     return { r: parseInt(m[1]), g: parseInt(m[2]), b: parseInt(m[3]) };
   },
 
-  _isColorProperty(prop) {
+  _isColorProperty(prop: string) {
     return prop === 'color' || prop === 'background-color' ||
            (prop.includes('border') && prop.includes('color'));
   },
 
-  _isSpacingProperty(prop) {
+  _isSpacingProperty(prop: string) {
     return prop.startsWith('margin') || prop.startsWith('padding') ||
            prop === 'gap' || prop === 'row-gap' || prop === 'column-gap' ||
            prop === 'top' || prop === 'right' || prop === 'bottom' || prop === 'left';
   },
 
-  _isRadiusProperty(prop) {
+  _isRadiusProperty(prop: string) {
     return prop.includes('radius');
   },
 
-  _classifyNumericSeverity(prop, diff) {
+  _classifyNumericSeverity(prop: string, diff: number): 'major' | 'minor' {
     if (prop === 'font-size' && diff > 2) return 'major';
     if (prop === 'font-weight') return 'major';
     if (this._isSpacingProperty(prop) && diff <= 4) return 'minor';
@@ -182,7 +207,3 @@ const DiffEngine = {
     return 'major';
   }
 };
-
-if (typeof window !== 'undefined') {
-  window.DiffEngine = DiffEngine;
-}

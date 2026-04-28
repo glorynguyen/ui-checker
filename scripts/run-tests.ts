@@ -1,9 +1,9 @@
 import { spawnSync } from 'node:child_process';
 
 const rawArgs = process.argv.slice(2);
-const mode = ['watch', 'coverage'].includes(rawArgs[0]) ? rawArgs.shift() : 'test';
+const mode = ['watch', 'coverage'].includes(rawArgs[0]) ? (rawArgs.shift() as string) : 'test';
 
-function takeOption(args, name) {
+function takeOption(args: string[], name: string): string | null {
   const prefix = `${name}=`;
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
@@ -20,8 +20,8 @@ function takeOption(args, name) {
   return null;
 }
 
-function takeMultiOption(args, name) {
-  const values = [];
+function takeMultiOption(args: string[], name: string): string[] {
+  const values: string[] = [];
   while (true) {
     const value = takeOption(args, name);
     if (value === null) break;
@@ -35,12 +35,12 @@ function takeMultiOption(args, name) {
   return values;
 }
 
-function resolveOption(args, cliName, envName) {
+function resolveOption(args: string[], cliName: string, envName: string): string | null {
   const value = takeOption(args, cliName);
   return value ?? process.env[envName] ?? null;
 }
 
-function resolveMultiOption(args, cliName, envName) {
+function resolveMultiOption(args: string[], cliName: string, envName: string): string[] {
   const values = takeMultiOption(args, cliName);
   if (values.length > 0) return values;
   const envValue = process.env[envName];
@@ -57,7 +57,7 @@ const lines = resolveOption(rawArgs, '--lines', 'TEST_COVERAGE_LINES');
 const functions = resolveOption(rawArgs, '--functions', 'TEST_COVERAGE_FUNCTIONS');
 const branches = resolveOption(rawArgs, '--branches', 'TEST_COVERAGE_BRANCHES');
 
-const args = [];
+const args: string[] = [];
 
 if (mode === 'coverage') {
   args.push('--experimental-test-coverage');
@@ -65,8 +65,8 @@ if (mode === 'coverage') {
   const includeList = include.length > 0
     ? include
     : [
-        'chrome-extension/lib/*.js',
-        'chrome-extension/content/*.js'
+        'chrome-extension/lib/*.ts',
+        'chrome-extension/content/*.ts'
       ];
 
   for (const pattern of includeList) {
@@ -86,9 +86,10 @@ if (mode === 'watch') {
   args.push('--watch');
 }
 
-const forwardedArgs = rawArgs.length > 0 ? rawArgs : ['test/*.test.js'];
+const forwardedArgs = rawArgs.length > 0 ? rawArgs : ['test/*.test.ts'];
 
-args.push('--test', ...forwardedArgs);
+// Use tsx to run the tests
+args.push('--import', 'tsx', '--test', ...forwardedArgs);
 
 const result = spawnSync(process.execPath, args, {
   cwd: process.cwd(),

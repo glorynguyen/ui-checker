@@ -1,8 +1,8 @@
 /**
  * Comparator — Utility to compare DOM computed styles with Figma design node data.
  */
-const Comparator = {
-  compare(domStyles, figmaStyles) {
+export const Comparator = {
+  compare(domStyles: Record<string, string>, figmaStyles: Record<string, string>) {
     const diffs = [];
 
     for (const prop in figmaStyles) {
@@ -22,7 +22,3 @@ const Comparator = {
     };
   }
 };
-
-if (typeof window !== 'undefined') {
-  window.Comparator = Comparator;
-}

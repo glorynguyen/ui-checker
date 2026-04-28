@@ -3,10 +3,10 @@
 
 (function () {
   let pickerActive = false;
-  let highlightEl = null;
-  let tooltipEl = null;
-  let lastTarget = null;
-  let selectedElement = null; // Persists after picker deactivates
+  let highlightEl: HTMLElement | null = null;
+  let tooltipEl: HTMLElement | null = null;
+  let lastTarget: HTMLElement | null = null;
+  let selectedElement: HTMLElement | null = null; // Persists after picker deactivates
 
   // Curated CSS properties to extract (same list used in style-extractor logic)
   const CURATED_PROPERTIES = [
@@ -68,18 +68,18 @@
     return el;
   }
 
-  function getElementDescriptor(el) {
+  function getElementDescriptor(el: HTMLElement) {
     let desc = el.tagName.toLowerCase();
     if (el.id) desc += `#${el.id}`;
     if (el.classList.length) desc += '.' + Array.from(el.classList).join('.');
     return desc;
   }
 
-  function extractStyles(el) {
+  function extractStyles(el: HTMLElement) {
     const computed = window.getComputedStyle(el);
     const rootComputed = window.getComputedStyle(document.documentElement);
     const rect = el.getBoundingClientRect();
-    const styles = {};
+    const styles: Record<string, string> = {};
 
     for (const prop of CURATED_PROPERTIES) {
       styles[prop] = computed.getPropertyValue(prop).trim();
@@ -98,33 +98,37 @@
     };
   }
 
-  function onMouseMove(e) {
-    const target = e.target;
+  function onMouseMove(e: MouseEvent) {
+    const target = e.target as HTMLElement;
     if (target === highlightEl || target === tooltipEl) return;
     if (target.id === '__figma-diff-highlight__' || target.id === '__figma-diff-tooltip__') return;
 
     lastTarget = target;
     const rect = target.getBoundingClientRect();
 
-    highlightEl.style.display = 'block';
-    highlightEl.style.top = rect.top + 'px';
-    highlightEl.style.left = rect.left + 'px';
-    highlightEl.style.width = rect.width + 'px';
-    highlightEl.style.height = rect.height + 'px';
+    if (highlightEl) {
+      highlightEl.style.display = 'block';
+      highlightEl.style.top = rect.top + 'px';
+      highlightEl.style.left = rect.left + 'px';
+      highlightEl.style.width = rect.width + 'px';
+      highlightEl.style.height = rect.height + 'px';
+    }
 
-    const desc = getElementDescriptor(target);
-    const dims = `${Math.round(rect.width)} x ${Math.round(rect.height)}`;
-    tooltipEl.textContent = `${desc}  (${dims})`;
-    tooltipEl.style.display = 'block';
+    if (tooltipEl) {
+      const desc = getElementDescriptor(target);
+      const dims = `${Math.round(rect.width)} x ${Math.round(rect.height)}`;
+      tooltipEl.textContent = `${desc}  (${dims})`;
+      tooltipEl.style.display = 'block';
 
-    // Position tooltip above or below the element
-    let tooltipTop = rect.top - 28;
-    if (tooltipTop < 4) tooltipTop = rect.bottom + 4;
-    tooltipEl.style.top = tooltipTop + 'px';
-    tooltipEl.style.left = rect.left + 'px';
+      // Position tooltip above or below the element
+      let tooltipTop = rect.top - 28;
+      if (tooltipTop < 4) tooltipTop = rect.bottom + 4;
+      tooltipEl.style.top = tooltipTop + 'px';
+      tooltipEl.style.left = rect.left + 'px';
+    }
   }
 
-  function onClick(e) {
+  function onClick(e: MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
@@ -142,7 +146,7 @@
     deactivatePicker();
   }
 
-  function onKeyDown(e) {
+  function onKeyDown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       chrome.runtime.sendMessage({ action: 'PICKER_CANCELLED' });
       deactivatePicker();
@@ -181,7 +185,7 @@
     } else if (msg.action === 'CANCEL_PICKER') {
       deactivatePicker();
     } else if (msg.action === 'QUERY_SELECTOR') {
-      const el = document.querySelector(msg.selector);
+      const el = document.querySelector(msg.selector) as HTMLElement | null;
       if (el) {
         selectedElement = el;
         const data = extractStyles(el);
@@ -192,9 +196,9 @@
     } else if (msg.action === 'GET_ELEMENT_RECT') {
       // Return the bounding rect via sendResponse
       console.log('[Content] GET_ELEMENT_RECT, selector:', msg.selector, 'selectedElement:', !!selectedElement, 'lastTarget:', !!lastTarget);
-      let target = selectedElement || lastTarget;
+      let target: HTMLElement | null = selectedElement || lastTarget;
       if (msg.selector) {
-        const queried = document.querySelector(msg.selector);
+        const queried = document.querySelector(msg.selector) as HTMLElement | null;
         console.log('[Content] querySelector result:', !!queried, 'for selector:', msg.selector);
         target = queried || target;
       }

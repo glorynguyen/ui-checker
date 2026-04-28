@@ -1,8 +1,19 @@
 // Figma CSS Parser — parses CSS text copied from Figma Dev Mode into
 // normalized key-value pairs, expanding shorthands.
 
-const FigmaParser = {
-  parse(input) {
+export interface ParsedStyles {
+  styles: Record<string, string>;
+  varMap: Record<string, { varName: string; fallback: string | null; original: string }>;
+  rawStyles: Record<string, string>;
+  sourceDeclarations: Record<string, string>;
+}
+
+export interface MultiParsedStyles extends ParsedStyles {
+  label: string;
+}
+
+export const FigmaParser = {
+  parse(input: string | any): ParsedStyles {
     if (!input) return { styles: {}, varMap: {}, rawStyles: {}, sourceDeclarations: {} };
 
     // Handle JSON object (direct from API)
@@ -23,14 +34,14 @@ const FigmaParser = {
     return this._parseCSSText(input);
   },
 
-  _parseNodeObject(node) {
+  _parseNodeObject(node: any): ParsedStyles {
     const doc = node.document || node;
-    const styles = {};
-    const varMap = {};
-    const rawStyles = {};
-    const sourceDeclarations = {};
+    const styles: Record<string, string> = {};
+    const varMap: Record<string, any> = {};
+    const rawStyles: Record<string, string> = {};
+    const sourceDeclarations: Record<string, string> = {};
 
-    const setStyle = (prop, value) => {
+    const setStyle = (prop: string, value: string) => {
       styles[prop] = value;
       rawStyles[prop] = value;
       sourceDeclarations[prop] = `${prop}: ${value};`;
@@ -85,7 +96,7 @@ const FigmaParser = {
     return { styles, varMap, rawStyles, sourceDeclarations };
   },
 
-  _getPrimarySolidFill(fills) {
+  _getPrimarySolidFill(fills: any[]) {
     if (!Array.isArray(fills)) return null;
 
     for (const fill of fills) {
@@ -98,17 +109,17 @@ const FigmaParser = {
     return null;
   },
 
-  _isTextNode(doc) {
+  _isTextNode(doc: any) {
     return doc?.type === 'TEXT';
   },
 
-  _combineOpacity(fillOpacity, nodeOpacity) {
+  _combineOpacity(fillOpacity: number | undefined, nodeOpacity: number | undefined) {
     const fillAlpha = typeof fillOpacity === 'number' ? fillOpacity : 1;
     const nodeAlpha = typeof nodeOpacity === 'number' ? nodeOpacity : 1;
     return fillAlpha * nodeAlpha;
   },
 
-  _figmaColorToRgb(c, opacity = 1) {
+  _figmaColorToRgb(c: { r: number; g: number; b: number }, opacity: number = 1) {
     const r = Math.round(c.r * 255);
     const g = Math.round(c.g * 255);
     const b = Math.round(c.b * 255);
@@ -116,7 +127,7 @@ const FigmaParser = {
     return a === 1 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${a})`;
   },
 
-  _parseCSSText(cssText) {
+  _parseCSSText(cssText: string): ParsedStyles {
     if (!cssText || !cssText.trim()) return { styles: {}, varMap: {}, rawStyles: {}, sourceDeclarations: {} };
 
     // Strip CSS comments
@@ -128,10 +139,10 @@ const FigmaParser = {
       .map(d => d.trim())
       .filter(d => d.includes(':'));
 
-    const styles = {};
-    const varMap = {};
-    const rawStyles = {};
-    const sourceDeclarations = {};
+    const styles: Record<string, string> = {};
+    const varMap: Record<string, any> = {};
+    const rawStyles: Record<string, string> = {};
+    const sourceDeclarations: Record<string, string> = {};
 
     for (const decl of declarations) {
       const colonIdx = decl.indexOf(':');
@@ -171,7 +182,7 @@ const FigmaParser = {
   },
 
   // Extract var(--name, fallback) info and resolve to fallback
-  _extractVarInfo(value) {
+  _extractVarInfo(value: string) {
     const match = value.match(/var\(\s*(--[\w-]+)\s*(?:,\s*(.+?))?\s*\)$/);
     if (!match) return null;
 
@@ -186,7 +197,7 @@ const FigmaParser = {
     };
   },
 
-  _expandShorthand(prop, value) {
+  _expandShorthand(prop: string, value: string): Record<string, string> {
     switch (prop) {
       case 'padding':
         return this._expandBoxShorthand('padding', value);
@@ -214,7 +225,7 @@ const FigmaParser = {
     }
   },
 
-  _expandBoxShorthand(prefix, value) {
+  _expandBoxShorthand(prefix: string, value: string): Record<string, string> {
     const parts = value.split(/\s+/);
     let top, right, bottom, left;
 
@@ -249,7 +260,7 @@ const FigmaParser = {
     };
   },
 
-  _expandBorderRadius(value) {
+  _expandBorderRadius(value: string): Record<string, string> {
     const parts = value.split(/\s+/);
     let tl, tr, br, bl;
 
@@ -284,13 +295,13 @@ const FigmaParser = {
     };
   },
 
-  _expandBorder(value) {
+  _expandBorder(value: string) {
     // border: 1px solid #ccc
     const match = value.match(/^(\S+)\s+(\S+)\s+(.+)$/);
     if (!match) return { 'border': value };
 
     const [, width, style, color] = match;
-    const result = {};
+    const result: Record<string, string> = {};
     for (const side of ['top', 'right', 'bottom', 'left']) {
       result[`border-${side}-width`] = width;
       result[`border-${side}-style`] = style;
@@ -299,7 +310,7 @@ const FigmaParser = {
     return result;
   },
 
-  _isColorValue(value) {
+  _isColorValue(value: string) {
     return /^#[0-9a-fA-F]{3,8}$/.test(value) ||
            /^rgba?\(/.test(value) ||
            /^hsla?\(/.test(value) ||
@@ -310,7 +321,7 @@ const FigmaParser = {
    * Parse multi-block CSS text into an array of { label, styles, varMap }.
    * Blocks are delimited by CSS comments or double-newlines.
    */
-  parseMulti(cssText) {
+  parseMulti(cssText: string): MultiParsedStyles[] {
     if (!cssText || !cssText.trim()) return [];
 
     // Try splitting by CSS comments first
@@ -318,11 +329,11 @@ const FigmaParser = {
     const comments = [...cssText.matchAll(commentPattern)];
 
     if (comments.length > 0) {
-      const blocks = [];
+      const blocks: MultiParsedStyles[] = [];
       for (let i = 0; i < comments.length; i++) {
         const label = comments[i][1].trim();
-        const start = comments[i].index + comments[i][0].length;
-        const end = i + 1 < comments.length ? comments[i + 1].index : cssText.length;
+        const start = (comments[i].index || 0) + comments[i][0].length;
+        const end = i + 1 < comments.length ? (comments[i + 1].index || 0) : cssText.length;
         const blockText = cssText.slice(start, end).trim();
         if (blockText) {
           const parsed = this.parse(blockText);
@@ -340,7 +351,3 @@ const FigmaParser = {
     });
   }
 };
-
-if (typeof window !== 'undefined') {
-  window.FigmaParser = FigmaParser;
-}

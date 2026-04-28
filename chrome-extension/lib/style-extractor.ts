@@ -2,7 +2,7 @@
 // Used by the content script (which inlines the extraction) and available
 // for reference/import in panel-side code.
 
-const PROPERTY_GROUPS = {
+export const PROPERTY_GROUPS: Record<string, string[]> = {
   Spacing: [
     'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
     'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
@@ -30,16 +30,13 @@ const PROPERTY_GROUPS = {
   ]
 };
 
-const ALL_PROPERTIES = Object.values(PROPERTY_GROUPS).flat();
+export const ALL_PROPERTIES = Object.values(PROPERTY_GROUPS).flat();
 
-function getPropertyGroup(property) {
+export function getPropertyGroup(property: string): string {
   for (const [group, props] of Object.entries(PROPERTY_GROUPS)) {
     if (props.includes(property)) return group;
   }
   return 'Other';
 }
 
-// Make available globally for panel scripts loaded in the same context
-if (typeof window !== 'undefined') {
-  window.StyleExtractor = { PROPERTY_GROUPS, ALL_PROPERTIES, getPropertyGroup };
-}
+export const StyleExtractor = { PROPERTY_GROUPS, ALL_PROPERTIES, getPropertyGroup };

@@ -1,13 +1,14 @@
-// --- Figma CSS Diff Service Worker v1.5.4 (GOLDEN) ---
-console.log('[SW] v1.5.4 LOADING...');
+// --- Figma CSS Diff Service Worker ---
+import { FigmaAPIClient } from '../lib/figma-api-client';
 
-let figmaClient = null;
-importScripts('../lib/figma-api-client.js');
+console.log('[SW] LOADING...');
 
-const panelPorts = new Map(); // tabId -> port
+let figmaClient: FigmaAPIClient | null = null;
+
+const panelPorts = new Map<number, chrome.runtime.Port>(); // tabId -> port
 
 // --- VS Code Bridge (WebSocket) ---
-let bridgeSocket = null;
+let bridgeSocket: WebSocket | null = null;
 
 async function connectToBridge() {
   const result = await chrome.storage.local.get(['bridgePort']);
@@ -43,7 +44,7 @@ async function connectToBridge() {
   }
 }
 
-function notifyPanelPorts(msg) {
+function notifyPanelPorts(msg: any) {
   for (const port of panelPorts.values()) {
     try { port.postMessage(msg); } catch (_) {}
   }
@@ -53,9 +54,9 @@ connectToBridge();
 
 // --- Main Message Router ---
 chrome.runtime.onConnect.addListener((port) => {
-  let tabId = null;
+  let tabId: number | null = null;
 
-  port.onMessage.addListener(async (msg) => {
+  port.onMessage.addListener(async (msg: any) => {
     // 1. Bridge Commands (Priority 1)
     if (msg.action === 'BRIDGE_COMMAND') {
       console.log('[SW] BRIDGE_COMMAND RECEIVED:', msg.payload);
@@ -93,16 +94,18 @@ chrome.runtime.onConnect.addListener((port) => {
     // 3. System Actions
     if (msg.action === 'INIT' && msg.tabId) {
       tabId = msg.tabId;
-      panelPorts.set(tabId, port);
-      console.log('[SW] INIT registered tabId:', tabId);
+      if (tabId !== null) {
+        panelPorts.set(tabId, port);
+        console.log('[SW] INIT registered tabId:', tabId);
+      }
       return;
     }
 
-    if (msg.action === 'CAPTURE_ELEMENT' && tabId) {
+    if (msg.action === 'CAPTURE_ELEMENT' && tabId !== null) {
         console.log('[SW] CAPTURING ELEMENT for tab:', tabId);
         chrome.tabs.get(tabId).then(tab => {
             return Promise.all([
-                chrome.tabs.sendMessage(tabId, { action: 'GET_ELEMENT_RECT', selector: msg.selector }),
+                chrome.tabs.sendMessage(tabId!, { action: 'GET_ELEMENT_RECT', selector: msg.selector }),
                 chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' })
             ]);
         }).then(([rectData, screenshot]) => {
@@ -124,19 +127,19 @@ chrome.runtime.onConnect.addListener((port) => {
     }
 
     // Forward to content script if not handled
-    if (tabId) {
+    if (tabId !== null) {
       chrome.tabs.sendMessage(tabId, msg).catch(() => {});
     }
   });
 
   port.onDisconnect.addListener(() => {
-    if (tabId) panelPorts.delete(tabId);
+    if (tabId !== null) panelPorts.delete(tabId);
   });
 });
 
 // --- Forward messages from Content Script to Panel ---
 chrome.runtime.onMessage.addListener((msg, sender) => {
-  if (!sender.tab) return;
+  if (!sender.tab || sender.tab.id === undefined) return;
   const port = panelPorts.get(sender.tab.id);
   if (port) {
     try { port.postMessage(msg); } catch (_) {}
@@ -144,7 +147,7 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
 });
 
 // --- Figma Helpers ---
-async function getNodeData(fileKey, nodeId, forceRefresh = false) {
+async function getNodeData(fileKey: string, nodeId: string, forceRefresh: boolean = false) {
   const client = await ensureClient();
   if (!client) throw new Error('No token found');
   const nodeData = await client.getNode(nodeId, fileKey);

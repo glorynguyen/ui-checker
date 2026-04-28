@@ -1,13 +1,12 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-
-const { loadBrowserScript, createBrowserSandbox } = require('../test-support/load-browser-script');
-const { createContentScriptSandbox, createMockElement } = require('../test-support/content-script-harness');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { loadBrowserScript, createBrowserSandbox } from '../test-support/load-browser-script.js';
+import { createContentScriptSandbox, createMockElement } from '../test-support/content-script-harness.js';
 
 function loadContentScriptHarness(options = {}) {
   const harness = createContentScriptSandbox(options);
   const sandbox = createBrowserSandbox(harness.sandbox);
-  loadBrowserScript('chrome-extension/content/content.js', [], sandbox);
+  loadBrowserScript('chrome-extension/dist/content/content.js', [], sandbox);
   assert.equal(harness.messageListeners.length, 1);
 
   return {
@@ -71,16 +70,17 @@ test('content script reports selector misses and returns rect data for selected 
 
   harness.listener({ action: 'QUERY_SELECTOR', selector: '.card' }, null, () => {});
 
-  let response = null;
+  let response: any = null;
   const keepAlive = harness.listener(
     { action: 'GET_ELEMENT_RECT', selector: '.card' },
     null,
-    (payload) => {
+    (payload: any) => {
       response = payload;
     }
   );
 
   assert.equal(keepAlive, true);
+  assert.ok(response);
   assert.equal(response.rect.x, 45);
   assert.equal(response.rect.y, 68);
   assert.equal(response.rect.viewportX, 40);
@@ -118,14 +118,14 @@ test('content script picker handlers react to mouse, click, and escape events', 
     stopImmediatePropagation() {}
   });
 
-  const selectionMessage = harness.sentMessages.find((message) => message.action === 'ELEMENT_SELECTED');
+  const selectionMessage = harness.sentMessages.find((message: any) => message.action === 'ELEMENT_SELECTED');
   assert.ok(selectionMessage);
   assert.equal(selectionMessage.data.element, 'section.hero');
   assert.equal(harness.listeners.size, 0);
 
   harness.listener({ action: 'START_PICKER' }, null, () => {});
   harness.listeners.get('keydown')({ key: 'Escape' });
-  const cancelMessage = harness.sentMessages.find((message) => message.action === 'PICKER_CANCELLED');
+  const cancelMessage = harness.sentMessages.find((message: any) => message.action === 'PICKER_CANCELLED');
   assert.ok(cancelMessage);
   assert.equal(harness.listeners.size, 0);
   assert.equal(harness.appendedNodes[0].removeCalled, true);
@@ -135,14 +135,15 @@ test('content script picker handlers react to mouse, click, and escape events', 
 test('content script returns an error when no rect target is available', () => {
   const harness = loadContentScriptHarness();
 
-  let response = null;
+  let response: any = null;
   harness.listener(
     { action: 'GET_ELEMENT_RECT', selector: '.missing' },
     null,
-    (payload) => {
+    (payload: any) => {
       response = payload;
     }
   );
 
+  assert.ok(response);
   assert.equal(response.error, true);
 });

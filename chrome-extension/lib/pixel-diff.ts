@@ -1,25 +1,35 @@
 // Pixel-level image comparison engine.
 // Compares two images (as canvas ImageData) and produces a diff heatmap.
 
-const PixelDiff = (() => {
+export interface PixelDiffOptions {
+  threshold?: number;
+}
+
+export interface PixelDiffResult {
+  diffImageData: ImageData;
+  matchPercent: number;
+  diffCount: number;
+  totalPixels: number;
+}
+
+export const PixelDiff = {
   /**
    * Compare two ImageData objects pixel-by-pixel.
    * Images must be the same dimensions (caller should resize first).
    *
    * @param {ImageData} imgA - First image (e.g. browser screenshot)
    * @param {ImageData} imgB - Second image (e.g. Figma design)
-   * @param {object} opts
-   * @param {number} opts.threshold - Per-channel difference threshold (0-255). Default 10.
-   * @returns {{ diffImageData: ImageData, matchPercent: number, diffCount: number, totalPixels: number }}
+   * @param {PixelDiffOptions} opts
+   * @returns {PixelDiffResult}
    */
-  function compare(imgA, imgB, opts = {}) {
+  compare(imgA: ImageData, imgB: ImageData, opts: PixelDiffOptions = {}): PixelDiffResult {
     const threshold = opts.threshold ?? 10;
     const width = imgA.width;
     const height = imgA.height;
     const totalPixels = width * height;
 
     const diffCanvas = new OffscreenCanvas(width, height);
-    const diffCtx = diffCanvas.getContext('2d');
+    const diffCtx = diffCanvas.getContext('2d')!;
     const diffImageData = diffCtx.createImageData(width, height);
     const diff = diffImageData.data;
     const a = imgA.data;
@@ -55,7 +65,7 @@ const PixelDiff = (() => {
       : 100;
 
     return { diffImageData, matchPercent, diffCount, totalPixels };
-  }
+  },
 
   /**
    * Load an image (URL or data URL) into ImageData at the given dimensions.
@@ -64,37 +74,35 @@ const PixelDiff = (() => {
    * @param {number} height - Target height
    * @returns {Promise<ImageData>}
    */
-  async function loadImageData(src, width, height) {
+  async loadImageData(src: string, width: number, height: number): Promise<ImageData> {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     return new Promise((resolve, reject) => {
       img.onload = () => {
         const canvas = new OffscreenCanvas(width, height);
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d')!;
         ctx.drawImage(img, 0, 0, width, height);
         resolve(ctx.getImageData(0, 0, width, height));
       };
       img.onerror = () => reject(new Error('Failed to load image'));
       img.src = src;
     });
-  }
+  },
 
   /**
    * Render ImageData to a data URL via OffscreenCanvas.
    * @param {ImageData} imageData
    * @returns {Promise<string>}
    */
-  async function imageDataToURL(imageData) {
+  async imageDataToURL(imageData: ImageData): Promise<string> {
     const canvas = new OffscreenCanvas(imageData.width, imageData.height);
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d')!;
     ctx.putImageData(imageData, 0, 0);
     const blob = await canvas.convertToBlob({ type: 'image/png' });
     return new Promise((resolve) => {
       const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
+      reader.onload = () => resolve(reader.result as string);
       reader.readAsDataURL(blob);
     });
   }
-
-  return { compare, loadImageData, imageDataToURL };
-})();
+};

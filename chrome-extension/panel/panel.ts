@@ -1,48 +1,53 @@
 // Panel logic — UI state, wiring to diff engine, result display.
+import { StyleExtractor } from '../lib/style-extractor';
+import { FigmaParser, ParsedStyles } from '../lib/figma-parser';
+import { Normalizer } from '../lib/normalizer';
+import { DiffEngine, DiffReport, DiffResult } from '../lib/diff-engine';
+import { PixelDiff } from '../lib/pixel-diff';
 
 (function () {
   // --- DOM refs ---
-  const pickBtn = document.getElementById('pick-btn');
-  const pickStatus = document.getElementById('pick-status');
-  const settingsBtn = document.getElementById('settings-btn');
-  const settingsPanel = document.getElementById('settings-panel');
-  const selectionEmptyState = document.getElementById('selection-empty-state');
-  const comparisonWorkspace = document.getElementById('comparison-workspace');
-  const elementInfo = document.getElementById('element-info');
-  const elementName = document.getElementById('element-name');
-  const elementDims = document.getElementById('element-dims');
-  const figmaSpecSection = document.getElementById('figma-spec-section');
-  const figmaInput = document.getElementById('figma-input');
-  const extractedStyles = document.getElementById('extracted-styles');
-  const compareBtn = document.getElementById('compare-btn');
-  const resultsSection = document.getElementById('results-section');
-  const resultsSummary = document.getElementById('results-summary');
-  const resultsList = document.getElementById('results-list');
-  const copyBtn = document.getElementById('copy-btn');
-  const copyAiBtn = document.getElementById('copy-ai-btn');
-  const clearBtn = document.getElementById('clear-btn');
-  const selectorInput = document.getElementById('selector-input');
-  const selectorBtn = document.getElementById('selector-btn');
-  const mappingSelect = document.getElementById('mapping-select');
-  const mappingLoadBtn = document.getElementById('mapping-load-btn');
-  const mappingDeleteBtn = document.getElementById('mapping-delete-btn');
-  const mappingSaveBtn = document.getElementById('mapping-save-btn');
-  const mappingExportBtn = document.getElementById('mapping-export-btn');
-  const mappingImportInput = document.getElementById('mapping-import-input');
-  const resultsFilter = document.getElementById('results-filter');
-  const figmaCacheStatus = document.getElementById('figma-cache-status');
+  const pickBtn = document.getElementById('pick-btn') as HTMLButtonElement;
+  const pickStatus = document.getElementById('pick-status') as HTMLElement;
+  const settingsBtn = document.getElementById('settings-btn') as HTMLButtonElement;
+  const settingsPanel = document.getElementById('settings-panel') as HTMLElement;
+  const selectionEmptyState = document.getElementById('selection-empty-state') as HTMLElement;
+  const comparisonWorkspace = document.getElementById('comparison-workspace') as HTMLElement;
+  const elementInfo = document.getElementById('element-info') as HTMLElement;
+  const elementName = document.getElementById('element-name') as HTMLElement;
+  const elementDims = document.getElementById('element-dims') as HTMLElement;
+  const figmaSpecSection = document.getElementById('figma-spec-section') as HTMLElement;
+  const figmaInput = document.getElementById('figma-input') as HTMLTextAreaElement;
+  const extractedStyles = document.getElementById('extracted-styles') as HTMLElement;
+  const compareBtn = document.getElementById('compare-btn') as HTMLButtonElement;
+  const resultsSection = document.getElementById('results-section') as HTMLElement;
+  const resultsSummary = document.getElementById('results-summary') as HTMLElement;
+  const resultsList = document.getElementById('results-list') as HTMLElement;
+  const copyBtn = document.getElementById('copy-btn') as HTMLButtonElement;
+  const copyAiBtn = document.getElementById('copy-ai-btn') as HTMLButtonElement;
+  const clearBtn = document.getElementById('clear-btn') as HTMLButtonElement;
+  const selectorInput = document.getElementById('selector-input') as HTMLInputElement;
+  const selectorBtn = document.getElementById('selector-btn') as HTMLButtonElement;
+  const mappingSelect = document.getElementById('mapping-select') as HTMLSelectElement;
+  const mappingLoadBtn = document.getElementById('mapping-load-btn') as HTMLButtonElement;
+  const mappingDeleteBtn = document.getElementById('mapping-delete-btn') as HTMLButtonElement;
+  const mappingSaveBtn = document.getElementById('mapping-save-btn') as HTMLButtonElement;
+  const mappingExportBtn = document.getElementById('mapping-export-btn') as HTMLButtonElement;
+  const mappingImportInput = document.getElementById('mapping-import-input') as HTMLInputElement;
+  const resultsFilter = document.getElementById('results-filter') as HTMLInputElement;
+  const figmaCacheStatus = document.getElementById('figma-cache-status') as HTMLElement;
 
   // --- State ---
-  let extractedData = null; // { element, dimensions, styles }
-  let lastDiffReport = null;
-  let currentVarMap = {};    // property → { varName, fallback, original }
-  let varOverrides = {};     // property → user-overridden value
-  let figmaFetchStatus = { node: null, image: null };
+  let extractedData: any = null; // { element, dimensions, styles }
+  let lastDiffReport: any = null;
+  let currentVarMap: ParsedStyles['varMap'] = {};    // property → { varName, fallback, original }
+  let varOverrides: Record<string, string> = {};     // property → user-overridden value
+  let figmaFetchStatus: { node: any; image: any } = { node: null, image: null };
   let currentFigmaRequestId = 0;
   let figmaFetchPending = 0;
-  let figmaSpecHighlightTimer = null;
+  let figmaSpecHighlightTimer: number | null = null;
 
-  const headerLocateBtn = document.getElementById('header-locate-btn');
+  const headerLocateBtn = document.getElementById('header-locate-btn') as HTMLButtonElement;
 
   headerLocateBtn?.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -62,7 +67,7 @@
     setTimeout(() => {
       if (headerLocateBtn.classList.contains('loading')) {
         headerLocateBtn.classList.remove('loading');
-        headerLocateBtn.textContent = 'Locate';
+        headerLocateBtn.textContent = 'Locate in Editor';
       }
     }, 3000);
   });
@@ -92,7 +97,7 @@
     // Restart the pulse so repeated picks still draw attention.
     void figmaSpecSection.offsetWidth;
     figmaSpecSection.classList.add('panel-section--highlight');
-    figmaSpecHighlightTimer = setTimeout(() => {
+    figmaSpecHighlightTimer = window.setTimeout(() => {
       figmaSpecSection.classList.remove('panel-section--highlight');
       figmaSpecHighlightTimer = null;
     }, 2200);
@@ -109,18 +114,18 @@
 
   // --- Messaging ---
   const tabId = chrome.devtools.inspectedWindow.tabId;
-  let port = null;
+  let port: chrome.runtime.Port | null = null;
 
   function connectPort() {
     try {
       port = chrome.runtime.connect({ name: 'panel' });
       port.postMessage({ action: 'INIT', tabId });
-    } catch (e) {
+    } catch (e: any) {
       if (checkContext(e)) return;
       console.error('[Panel] connectPort failed:', e);
     }
     if (port) {
-      port.onMessage.addListener((msg) => {
+      port.onMessage.addListener((msg: any) => {
       console.log('[Panel] Port message received:', msg.action);
       
       if (msg.action === 'BRIDGE_CONNECTED') {
@@ -150,7 +155,7 @@
         console.log('[Panel] Bridge found matches:', msg.matches);
         
         // Find all active searching buttons and update them
-        const searchingButtons = document.querySelectorAll('.bridge-btn.loading');
+        const searchingButtons = document.querySelectorAll('.bridge-btn.loading') as NodeListOf<HTMLButtonElement>;
         searchingButtons.forEach(btn => {
           btn.classList.remove('loading');
           if (msg.matches.length > 0) {
@@ -171,7 +176,7 @@
         });
 
         // Handle Hero Button separately for better text
-        const heroBtn = document.getElementById('header-locate-btn');
+        const heroBtn = document.getElementById('header-locate-btn') as HTMLButtonElement;
         if (heroBtn && heroBtn.classList.contains('loading')) {
           heroBtn.classList.remove('loading');
           heroBtn.textContent = msg.matches.length > 0 ? 'Found!' : 'Not Found';
@@ -186,7 +191,7 @@
       }
       
       // New: Handle MCP responses
-      const statusEl = document.getElementById('mcp-status');
+      const statusEl = document.getElementById('mcp-status') as HTMLElement;
       if (msg.action === 'MCP_CONNECTED') {
         statusEl.textContent = 'Connected';
         statusEl.className = 'status-badge connected';
@@ -271,11 +276,11 @@
   }
 
   // Figma API connection
-  function connectToFigma(token) {
+  function connectToFigma(token: string) {
     sendMessage({ action: 'FIGMA_CONNECT', token });
   }
 
-  function parseFigmaUrl(url) {
+  function parseFigmaUrl(url: string) {
     try {
       const u = new URL(url);
       const pathParts = u.pathname.split('/');
@@ -289,11 +294,11 @@
     }
   }
 
-  function fetchFigmaNode(inputId) {
+  function fetchFigmaNode(inputId: string) {
     return fetchFigmaNodeWithOptions(inputId, { forceRefresh: false });
   }
 
-  function fetchFigmaNodeWithOptions(inputId, options = {}) {
+  function fetchFigmaNodeWithOptions(inputId: string, options: { forceRefresh?: boolean } = {}) {
     let nodeId = inputId;
     let fileKey = mcpFileKeyInput.value.trim();
     const forceRefresh = Boolean(options.forceRefresh);
@@ -332,7 +337,7 @@
     sendMessage({ action: 'MCP_GET_IMAGE', nodeId, fileKey, forceRefresh, requestId });
   }
 
-  function loadFigmaImageUrl(url) {
+  function loadFigmaImageUrl(url: string) {
     figmaImage = url;
     // Show preview thumb in drop zone
     figmaDropZone.classList.add('has-image');
@@ -353,7 +358,7 @@
   connectPort();
   
 
-  function sendMessage(msg) {
+  function sendMessage(msg: any) {
     // MV3 service workers go idle after ~30s. Reconnect if null or disconnected.
     if (!port) {
       console.log('[Panel] Port is null, reconnecting before send');
@@ -361,21 +366,21 @@
     }
     
     try {
-      port.postMessage(msg);
+      port?.postMessage(msg);
       console.log('[Panel] postMessage sent:', msg.action);
-    } catch (e) {
+    } catch (e: any) {
       if (checkContext(e)) return;
       console.warn('[Panel] postMessage failed, reconnecting:', e.message);
       try {
           connectPort();
-          port.postMessage(msg);
+          port?.postMessage(msg);
       } catch (e2) {
           console.error('[Panel] Critical port failure:', e2);
       }
     }
   }
 
-  function checkContext(e) {
+  function checkContext(e: any) {
     if (e.message && e.message.includes('context invalidated')) {
       console.error('[Panel] Extension context invalidated. Please reload the extension and DevTools.');
       alert('Extension context invalidated. This usually happens after an extension update. Please reload the extension and the DevTools panel.');
@@ -385,15 +390,15 @@
   }
 
   // --- Figma API Configuration ---
-  const mcpConnectBtn = document.getElementById('mcp-connect-btn');
-  const mcpFetchBtn = document.getElementById('mcp-fetch-btn');
-  const mcpRefreshBtn = document.getElementById('mcp-refresh-btn');
-  const mcpSyncBtn = document.getElementById('mcp-sync-btn');
-  const mcpTokenInput = document.getElementById('mcp-token');
-  const mcpFileKeyInput = document.getElementById('figma-file-key');
-  const mcpNodeIdInput = document.getElementById('mcp-node-id');
+  const mcpConnectBtn = document.getElementById('mcp-connect-btn') as HTMLButtonElement;
+  const mcpFetchBtn = document.getElementById('mcp-fetch-btn') as HTMLButtonElement;
+  const mcpRefreshBtn = document.getElementById('mcp-refresh-btn') as HTMLButtonElement;
+  const mcpSyncBtn = document.getElementById('mcp-sync-btn') as HTMLButtonElement;
+  const mcpTokenInput = document.getElementById('mcp-token') as HTMLInputElement;
+  const mcpFileKeyInput = document.getElementById('figma-file-key') as HTMLInputElement;
+  const mcpNodeIdInput = document.getElementById('mcp-node-id') as HTMLInputElement;
 
-  function beginFigmaFetch(forceRefresh) {
+  function beginFigmaFetch(forceRefresh: boolean) {
     figmaFetchPending = 2;
     mcpFetchBtn.disabled = true;
     mcpRefreshBtn.disabled = true;
@@ -405,8 +410,8 @@
     figmaFetchPending = 0;
     mcpFetchBtn.disabled = false;
     mcpRefreshBtn.disabled = false;
-    mcpFetchBtn.textContent = 'Fetch';
-    mcpRefreshBtn.textContent = 'Refresh';
+    mcpFetchBtn.textContent = 'Fetch Spec';
+    mcpRefreshBtn.textContent = 'Refresh Live';
   }
 
   function markFigmaFetchComplete() {
@@ -416,11 +421,11 @@
     }
   }
 
-  function isActiveFigmaResponse(msg) {
+  function isActiveFigmaResponse(msg: any) {
     return !msg.requestId || msg.requestId === currentFigmaRequestId;
   }
 
-  function formatRelativeTime(timestamp) {
+  function formatRelativeTime(timestamp: number) {
     if (!timestamp) return 'just now';
     const diffMs = Math.max(0, Date.now() - timestamp);
     const diffSec = Math.round(diffMs / 1000);
@@ -432,7 +437,7 @@
     return `${diffHour}h ago`;
   }
 
-  function describeMeta(label, meta) {
+  function describeMeta(label: string, meta: any) {
     if (!meta) return `${label}: unavailable`;
     const sourceText = meta.source === 'cache' ? 'cached' : 'fresh';
     return `${label}: ${sourceText} ${formatRelativeTime(meta.cachedAt)}`;
@@ -517,7 +522,7 @@
     if (e.key === 'Enter') queryBySelector();
   });
 
-  function setPickerState(active) {
+  function setPickerState(active: boolean) {
     if (active) {
       pickBtn.disabled = true;
       setSelectionStatus('Click an element in the page, or press Esc to cancel.', 'active');
@@ -527,7 +532,7 @@
     }
   }
 
-  function onElementSelected(data) {
+  function onElementSelected(data: any) {
     setPickerState(false);
     setSelectionStatus('Selection ready.', 'success');
     extractedData = data;
@@ -539,7 +544,7 @@
 
     // Auto-fetch if Figma ID exists
     if (data.figmaId) {
-        document.getElementById('mcp-node-id').value = data.figmaId;
+        mcpNodeIdInput.value = data.figmaId;
         fetchFigmaNode(data.figmaId);
     } else {
         guideToFigmaSpec();
@@ -575,7 +580,7 @@
     compareBtn.disabled = !(extractedData && figmaInput.value.trim());
   }
 
-  function openVarEditor(_anchorEl, property, varInfo) {
+  function openVarEditor(_anchorEl: HTMLElement, property: string, varInfo: any) {
     const currentValue = varOverrides[property] ?? varInfo.fallback ?? '';
     const message = [
       `Override ${varInfo.varName} for ${property}.`,
@@ -603,9 +608,9 @@
   });
 
   function getTolerance() {
-    const s = parseInt(document.getElementById('tol-spacing').value);
-    const c = parseInt(document.getElementById('tol-color').value);
-    const r = parseInt(document.getElementById('tol-radius').value);
+    const s = parseInt((document.getElementById('tol-spacing') as HTMLInputElement).value);
+    const c = parseInt((document.getElementById('tol-color') as HTMLInputElement).value);
+    const r = parseInt((document.getElementById('tol-radius') as HTMLInputElement).value);
 
     return {
       spacing: isNaN(s) ? 2 : s,
@@ -618,12 +623,12 @@
   if (chrome.storage) {
     chrome.storage.local.get(['tolerance', 'bridgePort'], (result) => {
       if (result.tolerance) {
-        if (result.tolerance.spacing !== undefined) document.getElementById('tol-spacing').value = result.tolerance.spacing;
-        if (result.tolerance.color !== undefined) document.getElementById('tol-color').value = result.tolerance.color;
-        if (result.tolerance.borderRadius !== undefined) document.getElementById('tol-radius').value = result.tolerance.borderRadius;
+        if (result.tolerance.spacing !== undefined) (document.getElementById('tol-spacing') as HTMLInputElement).value = result.tolerance.spacing;
+        if (result.tolerance.color !== undefined) (document.getElementById('tol-color') as HTMLInputElement).value = result.tolerance.color;
+        if (result.tolerance.borderRadius !== undefined) (document.getElementById('tol-radius') as HTMLInputElement).value = result.tolerance.borderRadius;
       }
       if (result.bridgePort) {
-        document.getElementById('bridge-port').value = result.bridgePort;
+        (document.getElementById('bridge-port') as HTMLInputElement).value = result.bridgePort;
       }
     });
   }
@@ -631,11 +636,11 @@
   // Save settings on change
   settingsPanel.addEventListener('change', () => {
     const tol = getTolerance();
-    const bridgePort = parseInt(document.getElementById('bridge-port').value) || 3000;
+    const bridgePort = parseInt((document.getElementById('bridge-port') as HTMLInputElement).value) || 3000;
     if (chrome.storage) {
       try {
         chrome.storage.local.set({ tolerance: tol, bridgePort: bridgePort });
-      } catch (e) {
+      } catch (e: any) {
         checkContext(e);
       }
     }
@@ -668,7 +673,7 @@
     const baseReport = DiffEngine.compare(normalizedFigma, normalizedBrowser, tolerance);
     const report = {
       ...baseReport,
-      results: baseReport.results.map((result) => {
+      results: baseReport.results.map((result: any) => {
         const sourceExpected = rawFigmaStyles[result.property] ?? result.expected;
         return {
           ...result,
@@ -693,7 +698,7 @@
   function buildAiPrompt() {
     if (!lastDiffReport) return null;
 
-    const mismatches = lastDiffReport.results.filter(r => r.status === 'mismatch' || r.status === 'missing');
+    const mismatches = lastDiffReport.results.filter((r: any) => r.status === 'mismatch' || r.status === 'missing');
     const lines = [];
 
     lines.push('## UI Checker — AI Fix Request');
@@ -748,7 +753,7 @@
       await navigator.clipboard.writeText(prompt);
       const orig = copyAiBtn.textContent;
       copyAiBtn.textContent = 'Copied!';
-      setTimeout(() => { copyAiBtn.textContent = orig; }, 1500);
+      setTimeout(() => { copyAiBtn.textContent = orig || ''; }, 1500);
     });
   }
 
@@ -758,7 +763,7 @@
   });
 
   // --- Render results ---
-  function appendStat(parent, label, value, valueClass) {
+  function appendStat(parent: HTMLElement, label: string, value: string | number, valueClass: string) {
     const stat = document.createElement('div');
     stat.className = 'stat';
     
@@ -768,14 +773,14 @@
     
     const valueEl = document.createElement('span');
     valueEl.className = `stat-value ${valueClass}`;
-    valueEl.textContent = value;
+    valueEl.textContent = value.toString();
     
     stat.appendChild(labelEl);
     stat.appendChild(valueEl);
     parent.appendChild(stat);
   }
 
-  function renderResults(report) {
+  function renderResults(report: DiffReport) {
     resultsSection.classList.remove('hidden');
 
     // Summary
@@ -789,15 +794,15 @@
     resultsList.textContent = '';
 
     // Sort: mismatches first (major > minor), then missing, then matches
-    const severityOrder = { major: 0, minor: 1, negligible: 2 };
-    const statusOrder = { mismatch: 0, missing: 1, match: 2 };
+    const severityOrder: Record<string, number> = { major: 0, minor: 1, negligible: 2 };
+    const statusOrder: Record<string, number> = { mismatch: 0, missing: 1, match: 2 };
 
     const sorted = [...report.results].sort((a, b) => {
       const sa = statusOrder[a.status] ?? 3;
       const sb = statusOrder[b.status] ?? 3;
       if (sa !== sb) return sa - sb;
-      const sevA = severityOrder[a.severity] ?? 3;
-      const sevB = severityOrder[b.severity] ?? 3;
+      const sevA = severityOrder[a.severity || ''] ?? 3;
+      const sevB = severityOrder[b.severity || ''] ?? 3;
       return sevA - sevB;
     });
 
@@ -867,8 +872,8 @@
     }
   }
 
-  function groupByPropertyGroup(items) {
-    const groups = {};
+  function groupByPropertyGroup(items: DiffResult[]) {
+    const groups: Record<string, DiffResult[]> = {};
     for (const item of items) {
       const group = StyleExtractor.getPropertyGroup(item.property);
       if (!groups[group]) groups[group] = [];
@@ -877,7 +882,7 @@
     return groups;
   }
 
-  function createResultRow(r) {
+  function createResultRow(r: any) {
     const row = document.createElement('div');
     row.className = `result-row result-row--${r.status}`;
 
@@ -996,7 +1001,7 @@
           };
 
           // Store reference for callback
-          bridgeBtn.dataset.activeSearch = 'true';
+          (bridgeBtn as any).dataset.activeSearch = 'true';
 
           sendMessage({ action: 'BRIDGE_COMMAND', payload });
           
@@ -1022,14 +1027,14 @@
     return row;
   }
 
-  function createValueElement(value, className) {
+  function createValueElement(value: string, className: string) {
     const el = document.createElement('span');
     el.className = 'result-value ' + className;
     el.textContent = value;
     return el;
   }
 
-  function createColorSwatch(property, value) {
+  function createColorSwatch(property: string, value: string) {
     const el = document.createElement('span');
     if (!value) return el;
     const isColor = property === 'color' || property === 'background-color' || (property.includes('border') && property.includes('color'));
@@ -1040,18 +1045,13 @@
     return el;
   }
 
-  function escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  }
-
   // --- Copy Report ---
   copyBtn.addEventListener('click', () => {
     if (!lastDiffReport) return;
 
     const r = lastDiffReport;
-    const mismatches = r.results.filter(x => x.status === 'mismatch' || x.status === 'missing');
-    const matched = r.results.filter(x => x.status === 'match');
+    const mismatches = r.results.filter((x: any) => x.status === 'mismatch' || x.status === 'missing');
+    const matched = r.results.filter((x: any) => x.status === 'match');
 
     let md = `## Style Diff Report\n`;
     md += `**Element:** \`${r.element}\` (${r.dimensions.width} x ${r.dimensions.height})\n`;
@@ -1094,13 +1094,13 @@
   });
 
   // --- Variable Mappings ---
-  function getSavedMappings(cb) {
+  function getSavedMappings(cb: (mappings: any[]) => void) {
     chrome.storage.local.get(['savedMappings'], (result) => {
       cb(result.savedMappings || []);
     });
   }
 
-  function setSavedMappings(mappings, cb) {
+  function setSavedMappings(mappings: any[], cb: () => void) {
     chrome.storage.local.set({ savedMappings: mappings }, cb);
   }
 
@@ -1199,13 +1199,13 @@
     });
   });
 
-  mappingImportInput.addEventListener('change', (e) => {
+  mappingImportInput.addEventListener('change', (e: any) => {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const data = JSON.parse(reader.result);
+        const data = JSON.parse(reader.result as string);
         if (!data.name || !data.overrides || typeof data.overrides !== 'object') {
           alert('Invalid mapping file. Expected { name, overrides }.');
           return;
@@ -1243,30 +1243,27 @@
   // Phase 2 — Visual Overlay Comparison
   // =====================================================
 
-  const overlaySection = document.getElementById('overlay-section');
-  const overlayCaptureBtn = document.getElementById('overlay-capture-btn');
-  const figmaDropZone = document.getElementById('figma-drop-zone');
-  const figmaImageInput = document.getElementById('figma-image-input');
-  const overlaySliderRow = document.getElementById('overlay-slider-row');
-  const overlayOpacity = document.getElementById('overlay-opacity');
-  const overlayOpacityVal = document.getElementById('overlay-opacity-val');
-  const diffThresholdRow = document.getElementById('diff-threshold-row');
-  const diffThreshold = document.getElementById('diff-threshold');
-  const diffThresholdVal = document.getElementById('diff-threshold-val');
-  const overlayCanvasArea = document.getElementById('overlay-canvas-area');
-  const overlayCanvas = document.getElementById('overlay-canvas');
-  const overlayMatchInfo = document.getElementById('overlay-match-info');
-  const modeBtns = document.querySelectorAll('.overlay-mode-btn');
+  const overlayCaptureBtn = document.getElementById('overlay-capture-btn') as HTMLButtonElement;
+  const figmaDropZone = document.getElementById('figma-drop-zone') as HTMLElement;
+  const figmaImageInput = document.getElementById('figma-image-input') as HTMLInputElement;
+  const overlaySliderRow = document.getElementById('overlay-slider-row') as HTMLElement;
+  const overlayOpacity = document.getElementById('overlay-opacity') as HTMLInputElement;
+  const overlayOpacityVal = document.getElementById('overlay-opacity-val') as HTMLElement;
+  const diffThresholdRow = document.getElementById('diff-threshold-row') as HTMLElement;
+  const diffThreshold = document.getElementById('diff-threshold') as HTMLInputElement;
+  const diffThresholdVal = document.getElementById('diff-threshold-val') as HTMLElement;
+  const overlayCanvasArea = document.getElementById('overlay-canvas-area') as HTMLElement;
+  const overlayCanvas = document.getElementById('overlay-canvas') as HTMLCanvasElement;
+  const overlayMatchInfo = document.getElementById('overlay-match-info') as HTMLElement;
+  const modeBtns = document.querySelectorAll('.overlay-mode-btn') as NodeListOf<HTMLButtonElement>;
 
   let overlayMode = 'onion'; // 'onion' | 'side-by-side' | 'diff'
-  let browserScreenshot = null; // data URL of cropped element screenshot
-  let figmaImage = null;        // data URL of uploaded Figma image
-  let elementRect = null;       // bounding rect from capture
+  let browserScreenshot: string | null = null; // data URL of cropped element screenshot
+  let figmaImage: string | null = null;        // data URL of uploaded Figma image
   let capturedDPR = 1;
 
   // --- Capture element screenshot ---
   overlayCaptureBtn.addEventListener('click', () => {
-    console.log('[Panel] Capture clicked, extractedData:', extractedData ? { element: extractedData.element, dimensions: extractedData.dimensions } : null);
     if (!extractedData) {
       overlayCaptureBtn.textContent = 'Pick element first';
       setTimeout(() => { overlayCaptureBtn.textContent = 'Capture'; }, 1500);
@@ -1275,19 +1272,16 @@
     overlayCaptureBtn.disabled = true;
     overlayCaptureBtn.textContent = 'Capturing...';
     const selector = extractedData?.element || '';
-    console.log('[Panel] Sending CAPTURE_ELEMENT, selector:', selector);
     sendMessage({ action: 'CAPTURE_ELEMENT', selector });
   });
 
   // Handle capture response (add to port listener)
-  function onElementCaptured(msg) {
-    console.log('[Panel] onElementCaptured, rect:', msg.rect, 'screenshot:', msg.screenshot ? 'yes (' + msg.screenshot.length + ' chars)' : 'no', 'dpr:', msg.devicePixelRatio);
+  function onElementCaptured(msg: any) {
     overlayCaptureBtn.disabled = false;
     overlayCaptureBtn.textContent = 'Capture';
 
-    if (!msg.screenshot || !msg.rect) { console.warn('[Panel] Missing screenshot or rect, aborting'); return; }
+    if (!msg.screenshot || !msg.rect) { return; }
 
-    elementRect = msg.rect;
     capturedDPR = msg.devicePixelRatio || 1;
 
     // Crop the full-page screenshot to element bounds
@@ -1301,7 +1295,7 @@
       const canvas = document.createElement('canvas');
       canvas.width = msg.rect.width;
       canvas.height = msg.rect.height;
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d')!;
       ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, msg.rect.width, msg.rect.height);
 
       browserScreenshot = canvas.toDataURL('image/png');
@@ -1310,7 +1304,7 @@
     img.src = msg.screenshot;
   }
 
-  function onElementCaptureFailed(msg) {
+  function onElementCaptureFailed(msg: any) {
     console.error('[Panel] onElementCaptureFailed', msg);
     overlayCaptureBtn.disabled = false;
     overlayCaptureBtn.textContent = 'Failed — retry';
@@ -1320,7 +1314,7 @@
   // --- Figma image upload ---
   figmaDropZone.addEventListener('click', () => figmaImageInput.click());
 
-  figmaImageInput.addEventListener('change', (e) => {
+  figmaImageInput.addEventListener('change', (e: any) => {
     const file = e.target.files[0];
     if (file) loadFigmaImage(file);
     e.target.value = '';
@@ -1338,7 +1332,7 @@
   figmaDropZone.addEventListener('drop', (e) => {
     e.preventDefault();
     figmaDropZone.classList.remove('drag-over');
-    const file = e.dataTransfer.files[0];
+    const file = e.dataTransfer?.files[0];
     if (file && file.type.startsWith('image/')) loadFigmaImage(file);
   });
 
@@ -1349,16 +1343,17 @@
     for (const item of items) {
       if (item.type.startsWith('image/')) {
         e.preventDefault();
-        loadFigmaImage(item.getAsFile());
+        const file = item.getAsFile();
+        if (file) loadFigmaImage(file);
         return;
       }
     }
   });
 
-  function loadFigmaImage(file) {
+  function loadFigmaImage(file: File) {
     const reader = new FileReader();
     reader.onload = () => {
-      figmaImage = reader.result;
+      figmaImage = reader.result as string;
       figmaDropZone.classList.add('has-image');
       figmaDropZone.textContent = '';
       const img = document.createElement('img');
@@ -1376,7 +1371,7 @@
     btn.addEventListener('click', () => {
       modeBtns.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      overlayMode = btn.dataset.mode;
+      overlayMode = btn.dataset.mode!;
       updateSliderVisibility();
       renderOverlay();
     });
@@ -1409,15 +1404,15 @@
     overlayCanvasArea.classList.remove('hidden');
     overlayMatchInfo.classList.add('hidden');
 
-    const ctx = overlayCanvas.getContext('2d');
+    const ctx = overlayCanvas.getContext('2d')!;
 
     // Load available images
     const browserImg = browserScreenshot ? await loadImg(browserScreenshot) : null;
     const figmaImg = figmaImage ? await loadImg(figmaImage) : null;
 
     // Determine canvas size
-    const w = browserImg ? browserImg.width : figmaImg.width;
-    const h = browserImg ? browserImg.height : figmaImg.height;
+    const w = browserImg ? browserImg.width : (figmaImg ? figmaImg.width : 0);
+    const h = browserImg ? browserImg.height : (figmaImg ? figmaImg.height : 0);
 
     if (overlayMode === 'side-by-side') {
       const totalW = (browserImg ? w : 0) + (figmaImg ? figmaImg.width : 0) + (browserImg && figmaImg ? 8 : 0);
@@ -1478,7 +1473,7 @@
     }
   }
 
-  function loadImg(src) {
+  function loadImg(src: string): Promise<HTMLImageElement | null> {
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => resolve(img);
@@ -1487,11 +1482,11 @@
     });
   }
 
-  function getImageData(img, w, h) {
+  function getImageData(img: HTMLImageElement, w: number, h: number) {
     const c = document.createElement('canvas');
     c.width = w;
     c.height = h;
-    const ctx = c.getContext('2d');
+    const ctx = c.getContext('2d')!;
     ctx.drawImage(img, 0, 0, w, h);
     return ctx.getImageData(0, 0, w, h);
   }
@@ -1500,8 +1495,6 @@
   clearBtn.addEventListener('click', () => {
     browserScreenshot = null;
     figmaImage = null;
-    elementRect = null;
-    overlaySection.classList.add('hidden');
     overlayCanvasArea.classList.add('hidden');
     overlayMatchInfo.classList.add('hidden');
     // Reset drop zone

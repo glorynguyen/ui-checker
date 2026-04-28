@@ -1,16 +1,19 @@
 // Style Normalizer — converts both browser and Figma values into a
 // comparable canonical form.
 
-const Normalizer = {
-  normalize(styles, rootFontSize = 16) {
-    const result = {};
+export const Normalizer = {
+  normalize(styles: Record<string, string>, rootFontSize: number = 16): Record<string, string> {
+    const result: Record<string, string> = {};
     for (const [prop, value] of Object.entries(styles)) {
-      result[prop] = this.normalizeValue(prop, value, rootFontSize, styles);
+      const normalized = this.normalizeValue(prop, value, rootFontSize, styles);
+      if (normalized !== null) {
+        result[prop] = normalized;
+      }
     }
     return result;
   },
 
-  normalizeValue(prop, value, rootFontSize = 16, allStyles = {}) {
+  normalizeValue(prop: string, value: string | null | undefined, rootFontSize: number = 16, allStyles: Record<string, string> = {}): string | null {
     if (value === undefined || value === null) return null;
 
     let v = String(value).trim();
@@ -45,19 +48,26 @@ const Normalizer = {
       v = Math.round(fontSize * 1.2) + 'px';
     }
 
+    // --- border "none" ---
+    if (prop.includes('border') && (v === 'none' || v === '0px none rgb(0, 0, 0)')) {
+      if (prop.includes('width')) {
+        v = '0';
+      } else if (prop.includes('style')) {
+        v = 'none';
+      } else {
+        // For general border or border-top/left/etc
+        v = 'none';
+      }
+    }
+
     // --- Strip unit from zero ---
     if (/^0(px|rem|em|%|pt)?$/.test(v)) {
       v = '0';
     }
 
-    // --- border "none" ---
-    if (prop.includes('border') && (v === 'none' || v === '0px none rgb(0, 0, 0)')) {
-      if (prop.includes('width')) v = '0';
-      if (prop.includes('style')) v = 'none';
-    }
-
     // --- Figma missing units: bare numbers for px properties ---
-    if (/^\d+(\.\d+)?$/.test(v) && this._isPxProperty(prop)) {
+    // Only add px if it's NOT '0'
+    if (/^\d+(\.\d+)?$/.test(v) && v !== '0' && this._isPxProperty(prop)) {
       v = v + 'px';
     }
 
@@ -67,12 +77,12 @@ const Normalizer = {
     return v;
   },
 
-  _isColorProperty(prop) {
+  _isColorProperty(prop: string): boolean {
     return prop === 'color' || prop === 'background-color' ||
-           prop.includes('border') && prop.includes('color');
+           (prop.includes('border') && prop.includes('color'));
   },
 
-  _normalizeColor(value) {
+  _normalizeColor(value: string): string {
     // Hex to rgb
     const hexMatch = value.match(/^#([0-9a-f]{3,8})$/);
     if (hexMatch) {
@@ -92,8 +102,8 @@ const Normalizer = {
     return value;
   },
 
-  _hexToRgb(hex) {
-    let r, g, b, a;
+  _hexToRgb(hex: string): string {
+    let r: number, g: number, b: number, a: number;
     if (hex.length === 3) {
       r = parseInt(hex[0] + hex[0], 16);
       g = parseInt(hex[1] + hex[1], 16);
@@ -116,8 +126,8 @@ const Normalizer = {
     return `rgb(${r}, ${g}, ${b})`;
   },
 
-  _normalizeFontWeight(value) {
-    const map = {
+  _normalizeFontWeight(value: string): string {
+    const map: Record<string, string> = {
       'thin': '100', 'hairline': '100',
       'extra-light': '200', 'ultralight': '200',
       'light': '300',
@@ -131,19 +141,19 @@ const Normalizer = {
     return map[value] || value;
   },
 
-  _normalizeFontFamily(value) {
+  _normalizeFontFamily(value: string): string {
     // Take primary font, lowercase, strip quotes
     const primary = value.split(',')[0].trim().replace(/['"]/g, '');
     return primary.toLowerCase();
   },
 
-  _remToPx(value, rootFontSize) {
+  _remToPx(value: string, rootFontSize: number): string {
     return value.replace(/([\d.]+)rem/g, (_, num) => {
       return (parseFloat(num) * rootFontSize) + 'px';
     });
   },
 
-  _isPxProperty(prop) {
+  _isPxProperty(prop: string): boolean {
     const pxProps = [
       'font-size', 'line-height', 'letter-spacing',
       'width', 'height', 'min-width', 'max-width', 'min-height', 'max-height',
@@ -158,7 +168,3 @@ const Normalizer = {
     return pxProps.includes(prop);
   }
 };
-
-if (typeof window !== 'undefined') {
-  window.Normalizer = Normalizer;
-}

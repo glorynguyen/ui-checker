@@ -1,6 +1,6 @@
 # UI Checker Bridge
 
-Connect your browser-based UI inspection tools directly to your VS Code workspace. This extension acts as a secure, local bridge for the **Figma CSS Diff** Chrome extension.
+Connect your browser-based UI inspection tools directly to your VS Code workspace. This extension acts as a secure, local bridge for the [**Figma CSS Diff**](https://chromewebstore.google.com/detail/figma-css-diff/khbnahljdhbiafecmjbojhpocmehhbjc) Chrome extension.
 
 ## 🚀 Features
 
@@ -12,7 +12,7 @@ Connect your browser-based UI inspection tools directly to your VS Code workspac
 ## 🛠 Setup
 
 1. **Install from Marketplace:** Search for [**UI Checker Bridge**](https://marketplace.visualstudio.com/items?itemName=VinhNguyen-Vincent.ui-checker-bridge) in the VS Code Extensions view or click the link.
-2. Ensure you have the **Figma CSS Diff** Chrome extension installed.
+2. Ensure you have the [**Figma CSS Diff**](https://chromewebstore.google.com/detail/figma-css-diff/khbnahljdhbiafecmjbojhpocmehhbjc) Chrome extension installed.
 3. The bridge starts automatically on port `3000`. You can change this in VS Code settings if needed.
 
 ## 🧠 Smart Search Logic
