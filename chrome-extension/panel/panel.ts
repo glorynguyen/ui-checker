@@ -10,6 +10,12 @@ import { PixelDiff } from '../lib/pixel-diff';
   const pickBtn = document.getElementById('pick-btn') as HTMLButtonElement;
   const pickStatus = document.getElementById('pick-status') as HTMLElement;
   const settingsBtn = document.getElementById('settings-btn') as HTMLButtonElement;
+  const helpBtn = document.getElementById('help-btn') as HTMLButtonElement;
+  const closeGuideBtn = document.getElementById('close-guide-btn') as HTMLButtonElement;
+  const quickStartGuide = document.getElementById('quick-start-guide') as HTMLElement;
+  const manualSelectorToggle = document.getElementById('manual-selector-toggle') as HTMLElement;
+  const selectorBlock = document.getElementById('selector-block') as HTMLElement;
+  const step1Container = document.getElementById('step-1-container') as HTMLElement;
   const settingsPanel = document.getElementById('settings-panel') as HTMLElement;
   const selectionEmptyState = document.getElementById('selection-empty-state') as HTMLElement;
   const comparisonWorkspace = document.getElementById('comparison-workspace') as HTMLElement;
@@ -108,7 +114,40 @@ import { PixelDiff } from '../lib/pixel-diff';
 
     selectionEmptyState?.classList.toggle('hidden', hasSelection);
     comparisonWorkspace?.classList.toggle('hidden', !hasSelection);
+    
+    // When an element is selected, we can shrink Step 1 or emphasize Step 2.
+    if (hasSelection) {
+      step1Container?.classList.add('step-1--selected');
+      // Hide walkthrough and manual selector when selected to clean up
+      quickStartGuide?.classList.add('hidden');
+      selectorBlock?.classList.add('hidden');
+      manualSelectorToggle?.classList.add('hidden');
+    } else {
+      step1Container?.classList.remove('step-1--selected');
+      manualSelectorToggle?.classList.remove('hidden');
+    }
   }
+
+  // --- Help & Guide ---
+  helpBtn?.addEventListener('click', () => {
+    quickStartGuide?.classList.toggle('hidden');
+    if (quickStartGuide && !quickStartGuide.classList.contains('hidden')) {
+      quickStartGuide.scrollIntoView({ behavior: 'smooth' });
+    }
+  });
+
+  closeGuideBtn?.addEventListener('click', () => {
+    quickStartGuide?.classList.add('hidden');
+  });
+
+  // --- Manual Selector Toggle ---
+  manualSelectorToggle?.addEventListener('click', () => {
+    selectorBlock?.classList.remove('hidden');
+    manualSelectorToggle?.classList.add('hidden');
+    if (selectorInput) {
+      selectorInput.focus();
+    }
+  });
 
 
 
@@ -131,13 +170,13 @@ import { PixelDiff } from '../lib/pixel-diff';
       if (msg.action === 'BRIDGE_CONNECTED') {
         const bridgeBadge = document.getElementById('bridge-status');
         if (bridgeBadge) {
-          bridgeBadge.textContent = 'Bridge: Active';
+          bridgeBadge.textContent = 'Connected';
           bridgeBadge.className = 'status-badge connected';
         }
       } else if (msg.action === 'BRIDGE_DISCONNECTED') {
         const bridgeBadge = document.getElementById('bridge-status');
         if (bridgeBadge) {
-          bridgeBadge.textContent = 'Bridge: Offline';
+          bridgeBadge.textContent = 'Disconnected';
           bridgeBadge.className = 'status-badge';
         }
       } else if (msg.action === 'BRIDGE_ERROR') {
@@ -397,6 +436,24 @@ import { PixelDiff } from '../lib/pixel-diff';
   const mcpTokenInput = document.getElementById('mcp-token') as HTMLInputElement;
   const mcpFileKeyInput = document.getElementById('figma-file-key') as HTMLInputElement;
   const mcpNodeIdInput = document.getElementById('mcp-node-id') as HTMLInputElement;
+  
+  // --- Collapsible Sections (Accordion) ---
+  const sections = {
+    tolerance: { el: document.getElementById('section-tolerance'), key: 'toleranceRulesExpanded' },
+    bridge: { el: document.getElementById('section-bridge'), key: 'bridgeSettingsExpanded' },
+    figma: { el: document.getElementById('section-figma'), key: 'figmaConnectionExpanded' },
+    mappings: { el: document.getElementById('section-mappings'), key: 'variableMappingsExpanded' }
+  };
+
+  Object.entries(sections).forEach(([_, config]) => {
+    const header = config.el?.querySelector('.settings-card-header');
+    header?.addEventListener('click', () => {
+      const isExpanded = config.el?.classList.toggle('is-expanded');
+      if (chrome.storage) {
+        chrome.storage.local.set({ [config.key]: isExpanded });
+      }
+    });
+  });
 
   function beginFigmaFetch(forceRefresh: boolean) {
     figmaFetchPending = 2;
@@ -490,11 +547,23 @@ import { PixelDiff } from '../lib/pixel-diff';
 
   // Load saved Figma config
   if (chrome.storage) {
-    chrome.storage.local.get(['figmaConfig'], (result) => {
+    chrome.storage.local.get([
+      'figmaConfig', 
+      'figmaConnectionExpanded', 
+      'variableMappingsExpanded', 
+      'toleranceRulesExpanded', 
+      'bridgeSettingsExpanded'
+    ], (result) => {
       const config = result.figmaConfig || {};
 
       if (mcpTokenInput) mcpTokenInput.value = config.token || '';
       if (mcpFileKeyInput) mcpFileKeyInput.value = config.fileKey || '';
+
+      // Restore expanded states
+      if (result.figmaConnectionExpanded) sections.figma.el?.classList.add('is-expanded');
+      if (result.variableMappingsExpanded) sections.mappings.el?.classList.add('is-expanded');
+      if (result.toleranceRulesExpanded) sections.tolerance.el?.classList.add('is-expanded');
+      if (result.bridgeSettingsExpanded) sections.bridge.el?.classList.add('is-expanded');
 
       // Auto-connect if token exists
       if (config.token) {
@@ -1090,6 +1159,9 @@ import { PixelDiff } from '../lib/pixel-diff';
     resultsList.textContent = '';
     resultsFilter.value = '';
     compareBtn.disabled = true;
+    selectorInput.value = '';
+    selectorBlock?.classList.add('hidden');
+    manualSelectorToggle?.classList.remove('hidden');
     updateSelectionLayout();
   });
 

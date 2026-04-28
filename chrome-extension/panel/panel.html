@@ -17,52 +17,211 @@
         <span class="logo-subtext">Figma fidelity inside DevTools</span>
       </div>
     </div>
-    <button id="settings-btn" class="btn btn-icon" title="Settings">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="3"></circle>
-        <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"></path>
-      </svg>
-    </button>
+    <div class="header-actions">
+      <button id="help-btn" class="btn btn-icon" title="Quick Walkthrough">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+      </button>
+      <button id="settings-btn" class="btn btn-icon" title="Settings">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"></path>
+        </svg>
+      </button>
+    </div>
   </header>
 
-  <div class="hero-card section-card">
-    <div class="hero-copy">
-      <div class="section-title">Select Live Component</div>
-      <p class="section-description">Start with the DOM node you want to inspect. Picking from the page is the clearest path, and manual selectors stay available when you need them.</p>
+  <!-- Settings panel (collapsible) -->
+  <div id="settings-panel" class="section-card settings-panel hidden">
+    <div class="settings-shell">
+      <div class="settings-intro">
+        <div class="section-title">Workspace Settings</div>
+        <p class="section-description">Tune tolerance rules, manage the Figma connection, and save reusable variable mapping presets.</p>
+      </div>
+
+      <div class="settings-grid">
+        <section id="section-tolerance" class="settings-card collapsible-section">
+          <div class="settings-card-header">
+            <div class="header-main">
+              <div class="title-wrap">
+                <span class="caret">▶</span>
+                <div class="section-title">Tolerance Rules</div>
+              </div>
+              <p class="section-description">Control how strict the diff engine should be before a mismatch is flagged.</p>
+            </div>
+          </div>
+
+          <div class="collapsible-content">
+            <div class="setting-list">
+              <label class="setting-row">
+                <span>Spacing tolerance</span>
+                <div class="setting-input-wrap">
+                  <input type="number" id="tol-spacing" class="input-field" value="2" min="0" max="20">
+                  <span class="setting-unit">px</span>
+                </div>
+              </label>
+              <label class="setting-row">
+                <span>Color tolerance</span>
+                <div class="setting-input-wrap">
+                  <input type="number" id="tol-color" class="input-field" value="5" min="0" max="50">
+                  <span class="setting-unit">rgb</span>
+                </div>
+              </label>
+              <label class="setting-row">
+                <span>Radius tolerance</span>
+                <div class="setting-input-wrap">
+                  <input type="number" id="tol-radius" class="input-field" value="2" min="0" max="20">
+                </div>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <section id="section-bridge" class="settings-card collapsible-section">
+          <div class="settings-card-header settings-card-header-inline">
+            <div class="header-main">
+              <div class="title-wrap">
+                <span class="caret">▶</span>
+                <div class="section-title">VS Code Bridge</div>
+              </div>
+              <p class="section-description">Configure the local connection to your editor for the "Locate in Code" features.</p>
+            </div>
+            <span id="bridge-status" class="status-badge">Offline</span>
+          </div>
+
+          <div class="collapsible-content">
+            <div class="setting-list">
+              <label class="setting-row">
+                <span>Bridge Port</span>
+                <div class="setting-input-wrap">
+                  <input type="number" id="bridge-port" class="input-field" value="9876" min="1024" max="65535">
+                  <span class="setting-unit">port</span>
+                </div>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <section id="section-figma" class="settings-card settings-card-wide collapsible-section">
+          <div class="settings-card-header settings-card-header-inline">
+            <div class="header-main">
+              <div class="title-wrap">
+                <span class="caret">▶</span>
+                <div class="section-title">Figma Connection</div>
+              </div>
+              <p class="section-description">Authenticate once, then fetch specs from a node URL, ID, or synced browser tab.</p>
+            </div>
+            <span id="mcp-status" class="status-badge">Disconnected</span>
+          </div>
+
+          <div class="collapsible-content">
+            <div class="field-grid">
+              <label class="field-stack">
+                <span class="field-label">Figma File Key</span>
+                <input type="text" id="figma-file-key" class="input-field" placeholder="Paste the file key">
+              </label>
+              <label class="field-stack">
+                <span class="field-label">Personal Access Token</span>
+                <input type="password" id="mcp-token" class="input-field" placeholder="Paste your access token">
+              </label>
+              <label class="field-stack field-stack-wide">
+                <span class="field-label">Figma Node ID Or URL</span>
+                <input type="text" id="mcp-node-id" class="input-field" placeholder="Paste a Figma node URL or node ID">
+              </label>
+            </div>
+
+            <div class="connection-actions">
+              <button id="mcp-connect-btn" class="btn btn-primary">Connect</button>
+              <div class="action-cluster">
+                <button id="mcp-sync-btn" class="btn" title="Sync from open Figma tab">Sync Tab</button>
+                <button id="mcp-fetch-btn" class="btn">Fetch Spec</button>
+                <button id="mcp-refresh-btn" class="btn" title="Bypass cache and refetch from Figma">Refresh Live</button>
+              </div>
+            </div>
+
+            <div class="connection-meta">
+              <div id="figma-cache-status" class="config-meta hidden"></div>
+              <div class="config-hint">
+                Tip: Paste a Figma layer URL or use <b>Sync Tab</b> to auto-detect the active node from an open Figma browser tab.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="section-mappings" class="settings-card settings-card-wide collapsible-section">
+          <div class="settings-card-header">
+            <div class="header-main">
+              <div class="title-wrap">
+                <span class="caret">▶</span>
+                <div class="section-title">Variable Mappings</div>
+              </div>
+              <p class="section-description">Save and reuse fallback overrides for `var()`-based Figma values across repeated comparisons.</p>
+            </div>
+          </div>
+
+          <div class="collapsible-content">
+            <div class="mapping-stack">
+              <div class="mapping-controls mapping-controls-primary">
+                <select id="mapping-select" class="input-field">
+                  <option value="">-- No saved mappings --</option>
+                </select>
+                <button id="mapping-load-btn" class="btn" disabled>Load</button>
+                <button id="mapping-delete-btn" class="btn" disabled>Delete</button>
+              </div>
+              <div class="mapping-controls">
+                <button id="mapping-save-btn" class="btn">Save Current</button>
+                <button id="mapping-export-btn" class="btn" disabled>Export</button>
+                <label class="btn mapping-import-label">
+                  Import JSON
+                  <input type="file" id="mapping-import-input" accept=".json" hidden>
+                </label>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 1: Select Component -->
+  <div class="hero-card section-card" id="step-1-container">
+    <div class="hero-copy hero-copy--centered">
+      <div class="section-title">Step 1: Select Live Component</div>
+      <p class="section-description">Select a component on your page to begin comparison.</p>
     </div>
 
-    <div class="selection-workflow">
-      <div class="selection-primary-card">
+    <div class="selection-workflow selection-workflow--heroic">
+      <div class="selection-primary-card selection-primary-card--hero">
         <div class="selection-method-badge">Recommended</div>
-        <button id="pick-btn" class="btn btn-primary selection-pick-btn">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button id="pick-btn" class="btn btn-primary selection-pick-btn selection-pick-btn--large">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <circle cx="12" cy="12" r="10"></circle>
             <path d="M12 8v8M8 12h8"></path>
           </svg>
           Pick From Page
         </button>
-        <p class="selection-helper">We’ll highlight elements in the page so you can click the exact component.</p>
         <span id="pick-status" class="pick-status" aria-live="polite"></span>
       </div>
 
-      <div class="selection-divider">
-        <span>Or use a selector</span>
+      <div id="manual-selector-toggle" class="manual-selector-toggle">
+        <button class="btn btn-link">Or use a Manual CSS Selector</button>
       </div>
 
-      <div class="selector-block">
-        <label class="field-label" for="selector-input">Manual CSS Selector</label>
+      <div id="selector-block" class="selector-block hidden">
         <div class="selector-row">
-          <input type="text" id="selector-input" class="input-field selector-input" placeholder="Paste CSS selector (e.g. #app > .card)">
+          <input type="text" id="selector-input" class="input-field selector-input" placeholder="e.g. #app > .card">
           <button id="selector-btn" class="btn">Select</button>
         </div>
-        <p class="selector-hint">Helpful for repeated checks or elements that are hard to click.</p>
       </div>
     </div>
 
-    <div class="quick-start-guide">
+    <div id="quick-start-guide" class="quick-start-guide hidden">
       <div class="quick-start-header">
-        <span class="quick-start-kicker">First Time Here?</span>
-        <span class="quick-start-title">Quick Walkthrough</span>
+        <span class="quick-start-kicker">Quick Walkthrough</span>
+        <button id="close-guide-btn" class="btn btn-icon btn-close-guide" title="Close guide">×</button>
       </div>
       <div class="quick-start-steps">
         <div class="quick-start-step">
@@ -75,22 +234,22 @@
         <div class="quick-start-step">
           <span class="quick-start-step-num">2</span>
           <div>
-            <strong>Paste Or Fetch Figma Spec</strong>
-            <p>Add the matching Figma CSS or use the Figma connection below to pull it in automatically.</p>
+            <strong>Connect Figma Spec</strong>
+            <p>Add the matching Figma CSS or use the Figma connection to pull it in automatically.</p>
           </div>
         </div>
         <div class="quick-start-step">
           <span class="quick-start-step-num">3</span>
           <div>
             <strong>Run Comparison</strong>
-            <p>Review style mismatches first, then use the visual overlay when you need a closer check.</p>
+            <p>Review style mismatches and use the visual overlay for a pixel-perfect check.</p>
           </div>
         </div>
         <div class="quick-start-step">
           <span class="quick-start-step-num">4</span>
           <div>
             <strong>Locate in Code</strong>
-            <p><a href="https://marketplace.visualstudio.com/items?itemName=VinhNguyen-Vincent.ui-checker-bridge" target="_blank">Install our VS Code extension</a> to jump from any mismatch directly to its source file.</p>
+            <p><a href="https://marketplace.visualstudio.com/items?itemName=VinhNguyen-Vincent.ui-checker-bridge" target="_blank">Install our VS Code extension</a> to jump directly to source files.</p>
           </div>
         </div>
       </div>
@@ -107,7 +266,6 @@
           <button id="header-locate-btn" class="btn btn-primary bridge-btn-hero" title="Open this component in VS Code">
             <span>Locate in Editor</span>
           </button>
-          <div class="bridge-hint"><a href="https://marketplace.visualstudio.com/items?itemName=VinhNguyen-Vincent.ui-checker-bridge" target="_blank">Requires VS Code extension</a></div>
         </div>
       </div>
     </div>
@@ -117,146 +275,15 @@
     <div class="selection-empty-state-copy">
       <span class="selection-empty-kicker">Comparison Workspace</span>
       <h2>Pick an element to unlock the rest of the tools.</h2>
-      <p>Once you choose a live component, we will reveal the Figma spec area, extracted DOM styles, visual overlay, and comparison results in the right order.</p>
-    </div>
-    <div class="selection-empty-state-points">
-      <div class="selection-empty-point">
-        <strong>Focused first step</strong>
-        <span>Start with a real DOM target instead of scanning every panel at once.</span>
-      </div>
-      <div class="selection-empty-point">
-        <strong>Cleaner follow-up flow</strong>
-        <span>The compare workspace appears only when it is actually useful.</span>
-      </div>
-      <div class="selection-empty-point">
-        <strong>Editor Bridge</strong>
-        <span><a href="https://marketplace.visualstudio.com/items?itemName=VinhNguyen-Vincent.ui-checker-bridge" target="_blank">Install the VS Code extension</a> to jump directly from the browser to your source code.</span>
-      </div>
+      <p>Once you choose a live component, we will reveal the Figma spec area, extracted DOM styles, visual overlay, and comparison results.</p>
     </div>
   </div>
 
-  <!-- Settings panel (collapsible) -->
-  <div id="settings-panel" class="section-card settings-panel hidden">
-    <div class="settings-shell">
-      <div class="settings-intro">
-        <div class="section-title">Workspace Settings</div>
-        <p class="section-description">Tune tolerance rules, manage the Figma connection, and save reusable variable mapping presets.</p>
-      </div>
-
-      <div class="settings-grid">
-        <section class="settings-card">
-          <div class="settings-card-header">
-            <div>
-              <div class="section-title">Tolerance Rules</div>
-              <p class="section-description">Control how strict the diff engine should be before a mismatch is flagged.</p>
-            </div>
-          </div>
-
-          <div class="setting-list">
-            <label class="setting-row">
-              <span>Spacing tolerance</span>
-              <div class="setting-input-wrap">
-                <input type="number" id="tol-spacing" class="input-field" value="2" min="0" max="20">
-                <span class="setting-unit">px</span>
-              </div>
-            </label>
-            <label class="setting-row">
-              <span>Color tolerance</span>
-              <div class="setting-input-wrap">
-                <input type="number" id="tol-color" class="input-field" value="5" min="0" max="50">
-                <span class="setting-unit">rgb</span>
-              </div>
-            </label>
-            <label class="setting-row">
-              <span>Radius tolerance</span>
-              <div class="setting-input-wrap">
-                <input type="number" id="tol-radius" class="input-field" value="2" min="0" max="20">
-                <span class="setting-unit">px</span>
-              </div>
-            </label>
-            <label class="setting-row">
-              <span>Bridge Port</span>
-              <div class="setting-input-wrap">
-                <input type="number" id="bridge-port" class="input-field" value="9876" min="1024" max="65535">
-                <span class="setting-unit">port</span>
-              </div>
-            </label>
-          </div>
-        </section>
-
-        <section class="settings-card settings-card-wide">
-          <div class="settings-card-header settings-card-header-inline">
-            <div>
-              <div class="section-title">Figma Connection</div>
-              <p class="section-description">Authenticate once, then fetch specs from a node URL, ID, or synced browser tab.</p>
-            </div>
-            <span id="mcp-status" class="status-badge">Disconnected</span>
-          </div>
-
-          <div class="field-grid">
-            <label class="field-stack">
-              <span class="field-label">Figma File Key</span>
-              <input type="text" id="figma-file-key" class="input-field" placeholder="Paste the file key">
-            </label>
-            <label class="field-stack">
-              <span class="field-label">Personal Access Token</span>
-              <input type="password" id="mcp-token" class="input-field" placeholder="Paste your access token">
-            </label>
-            <label class="field-stack field-stack-wide">
-              <span class="field-label">Figma Node ID Or URL</span>
-              <input type="text" id="mcp-node-id" class="input-field" placeholder="Paste a Figma node URL or node ID">
-            </label>
-          </div>
-
-          <div class="connection-actions">
-            <button id="mcp-connect-btn" class="btn btn-primary">Connect</button>
-            <div class="action-cluster">
-              <button id="mcp-sync-btn" class="btn" title="Sync from open Figma tab">Sync Tab</button>
-              <button id="mcp-fetch-btn" class="btn">Fetch Spec</button>
-              <button id="mcp-refresh-btn" class="btn" title="Bypass cache and refetch from Figma">Refresh Live</button>
-            </div>
-          </div>
-
-          <div class="connection-meta">
-            <div id="figma-cache-status" class="config-meta hidden"></div>
-            <div class="config-hint">
-              Tip: Paste a Figma layer URL or use <b>Sync Tab</b> to auto-detect the active node from an open Figma browser tab.
-            </div>
-          </div>
-        </section>
-
-        <section class="settings-card settings-card-wide">
-          <div class="settings-card-header">
-            <div>
-              <div class="section-title">Variable Mappings</div>
-              <p class="section-description">Save and reuse fallback overrides for `var()`-based Figma values across repeated comparisons.</p>
-            </div>
-          </div>
-
-          <div class="mapping-stack">
-            <div class="mapping-controls mapping-controls-primary">
-              <select id="mapping-select" class="input-field">
-                <option value="">-- No saved mappings --</option>
-              </select>
-              <button id="mapping-load-btn" class="btn" disabled>Load</button>
-              <button id="mapping-delete-btn" class="btn" disabled>Delete</button>
-            </div>
-            <div class="mapping-controls">
-              <button id="mapping-save-btn" class="btn">Save Current</button>
-              <button id="mapping-export-btn" class="btn" disabled>Export</button>
-              <label class="btn mapping-import-label">
-                Import JSON
-                <input type="file" id="mapping-import-input" accept=".json" hidden>
-              </label>
-            </div>
-          </div>
-        </section>
-      </div>
-    </div>
-  </div>
-
-  <!-- Side-by-side panels -->
+  <!-- Step 2: Comparison Workspace -->
   <div id="comparison-workspace" class="comparison-workspace hidden">
+    <div class="step-header">
+      <div class="section-title">Step 2: Connect Figma Spec & Compare</div>
+    </div>
     <div class="panels">
       <div id="figma-spec-section" class="panel-section panel-section--figma">
         <div class="panel-header">
@@ -285,7 +312,7 @@
       <button id="compare-btn" class="btn btn-primary compare-btn" disabled>
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="9 11 12 14 22 4"></polyline>
-          <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path>
+          <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path>
         </svg>
         Run Comparison
       </button>
@@ -348,12 +375,10 @@
           </svg>
           Copy for AI
         </button>
-        <button id="clear-btn" class="btn">Reset</button>
       </div>
     </div>
   </div>
 
-  <!-- Scripts -->
   <script src="../dist/panel/panel.js"></script>
 </body>
 </html>

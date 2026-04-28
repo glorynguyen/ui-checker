@@ -110,11 +110,18 @@ body {
   letter-spacing: 0.02em;
 }
 
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .pick-status {
   font-size: 11px;
   color: var(--text-muted);
   transition: color 0.2s;
   line-height: 1.4;
+  text-align: center;
+  width: 100%;
 }
 
 .pick-status:empty {
@@ -199,6 +206,20 @@ body {
 .btn-sm {
   padding: 7px 12px;
   font-size: 13px;
+}
+
+.btn-link {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  text-decoration: underline;
+  box-shadow: none;
+  padding: 4px 8px;
+}
+
+.btn-link:hover {
+  background: var(--accent-soft);
+  transform: none;
 }
 
 .bridge-btn {
@@ -370,11 +391,24 @@ body {
   max-width: 520px;
 }
 
+.hero-copy--centered {
+  text-align: center;
+  margin: 0 auto 24px;
+}
+
 .selection-workflow {
   display: grid;
   grid-template-columns: minmax(0, 0.95fr) auto minmax(0, 1.05fr);
   gap: 14px;
   align-items: stretch;
+}
+
+.selection-workflow--heroic {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  grid-column: 1 / -1;
 }
 
 .selection-primary-card,
@@ -385,6 +419,15 @@ body {
     linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0.01)),
     var(--bg-elevated);
   padding: 14px;
+}
+
+.selection-primary-card--hero {
+  align-items: center;
+  width: 100%;
+  max-width: 400px;
+  border: none;
+  background: transparent;
+  padding: 0;
 }
 
 .selection-primary-card {
@@ -411,6 +454,13 @@ body {
   min-height: 38px;
 }
 
+.selection-pick-btn--large {
+  padding: 16px 32px;
+  font-size: 16px;
+  border-radius: 14px;
+  gap: 12px;
+}
+
 .selection-helper,
 .selector-hint {
   font-size: 11px;
@@ -435,6 +485,12 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  width: 100%;
+  max-width: 400px;
+}
+
+.manual-selector-toggle {
+  margin-top: -8px;
 }
 
 .selector-row {
@@ -483,6 +539,11 @@ body {
   color: var(--text-muted);
 }
 
+.step-header {
+  margin-bottom: 16px;
+  padding: 0 4px;
+}
+
 .element-info strong {
   display: inline-block;
   max-width: 100%;
@@ -502,16 +563,26 @@ body {
   background:
     linear-gradient(135deg, rgba(55, 179, 255, 0.08), rgba(55, 179, 255, 0)),
     var(--bg-elevated);
-  padding: 14px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
+  margin-top: 20px;
 }
 
 .quick-start-header {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.btn-close-guide {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font-size: 18px;
+  border-radius: 50%;
+  line-height: 1;
 }
 
 .quick-start-kicker {
@@ -669,6 +740,58 @@ body {
 
 .settings-card-wide {
   grid-column: span 1;
+}
+
+/* Collapsible Section Styles (Accordion) */
+.collapsible-section .settings-card-header {
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 0;
+  padding: 2px 0;
+  transition: opacity 0.2s;
+}
+
+.collapsible-section .settings-card-header:hover {
+  opacity: 0.8;
+}
+
+.collapsible-section .title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.collapsible-section .caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  font-size: 10px;
+  color: var(--accent);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 0.7;
+}
+
+.collapsible-section.is-expanded .caret {
+  transform: rotate(90deg);
+}
+
+.collapsible-section.is-expanded .settings-card-header {
+  margin-bottom: 14px;
+}
+
+.collapsible-section .collapsible-content {
+  display: none;
+}
+
+.collapsible-section.is-expanded .collapsible-content {
+  display: block;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.collapsible-section .section-title {
+  margin-bottom: 0 !important;
 }
 
 .settings-card-header {
