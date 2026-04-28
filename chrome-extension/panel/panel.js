@@ -42,6 +42,31 @@
   let figmaFetchPending = 0;
   let figmaSpecHighlightTimer = null;
 
+  const headerLocateBtn = document.getElementById('header-locate-btn');
+
+  headerLocateBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!extractedData || headerLocateBtn.classList.contains('loading')) return;
+
+    headerLocateBtn.classList.add('loading');
+    headerLocateBtn.textContent = 'Searching';
+    
+    sendMessage({ 
+      action: 'BRIDGE_COMMAND', 
+      payload: { 
+        action: 'FIND_SELECTOR', 
+        selector: extractedData.element 
+      } 
+    });
+
+    setTimeout(() => {
+      if (headerLocateBtn.classList.contains('loading')) {
+        headerLocateBtn.classList.remove('loading');
+        headerLocateBtn.textContent = 'Locate';
+      }
+    }, 3000);
+  });
+
   function setSelectionStatus(message = '', tone = '') {
     pickStatus.textContent = message;
     pickStatus.classList.remove('active', 'error', 'success');
@@ -97,6 +122,57 @@
     if (port) {
       port.onMessage.addListener((msg) => {
       console.log('[Panel] Port message received:', msg.action);
+      
+      if (msg.action === 'BRIDGE_CONNECTED') {
+        const bridgeBadge = document.getElementById('bridge-status');
+        if (bridgeBadge) {
+          bridgeBadge.textContent = 'Bridge: Active';
+          bridgeBadge.className = 'status-badge connected';
+        }
+      } else if (msg.action === 'BRIDGE_DISCONNECTED') {
+        const bridgeBadge = document.getElementById('bridge-status');
+        if (bridgeBadge) {
+          bridgeBadge.textContent = 'Bridge: Offline';
+          bridgeBadge.className = 'status-badge';
+        }
+      } else if (msg.action === 'SELECTOR_RESULTS') {
+        console.log('[Panel] Bridge found matches:', msg.matches);
+        
+        // Find all active searching buttons and update them
+        const searchingButtons = document.querySelectorAll('.bridge-btn.loading');
+        searchingButtons.forEach(btn => {
+          btn.classList.remove('loading');
+          if (msg.matches.length > 0) {
+            btn.classList.add('success');
+            btn.textContent = 'Found';
+            setTimeout(() => {
+              btn.classList.remove('success');
+              btn.textContent = 'Locate';
+            }, 2000);
+          } else {
+            btn.classList.add('error');
+            btn.textContent = 'Not Found';
+            setTimeout(() => {
+              btn.classList.remove('error');
+              btn.textContent = 'Locate';
+            }, 2000);
+          }
+        });
+
+        // Handle Hero Button separately for better text
+        const heroBtn = document.getElementById('header-locate-btn');
+        if (heroBtn && heroBtn.classList.contains('loading')) {
+          heroBtn.classList.remove('loading');
+          heroBtn.textContent = msg.matches.length > 0 ? 'Found!' : 'Not Found';
+          setTimeout(() => { heroBtn.textContent = 'Locate in Editor'; }, 2000);
+        }
+
+        if (msg.matches.length === 0) {
+          setSelectionStatus('Selector not found in local workspace.', 'error');
+        } else {
+          setSelectionStatus(`Opened ${msg.matches[0].file.split('/').pop()}`, 'success');
+        }
+      }
       
       // New: Handle MCP responses
       const statusEl = document.getElementById('mcp-status');
@@ -529,11 +605,14 @@
 
   // Load saved settings
   if (chrome.storage) {
-    chrome.storage.local.get(['tolerance'], (result) => {
+    chrome.storage.local.get(['tolerance', 'bridgePort'], (result) => {
       if (result.tolerance) {
         if (result.tolerance.spacing !== undefined) document.getElementById('tol-spacing').value = result.tolerance.spacing;
         if (result.tolerance.color !== undefined) document.getElementById('tol-color').value = result.tolerance.color;
         if (result.tolerance.borderRadius !== undefined) document.getElementById('tol-radius').value = result.tolerance.borderRadius;
+      }
+      if (result.bridgePort) {
+        document.getElementById('bridge-port').value = result.bridgePort;
       }
     });
   }
@@ -541,9 +620,10 @@
   // Save settings on change
   settingsPanel.addEventListener('change', () => {
     const tol = getTolerance();
+    const bridgePort = parseInt(document.getElementById('bridge-port').value) || 3000;
     if (chrome.storage) {
       try {
-        chrome.storage.local.set({ tolerance: tol });
+        chrome.storage.local.set({ tolerance: tol, bridgePort: bridgePort });
       } catch (e) {
         checkContext(e);
       }
@@ -865,9 +945,16 @@
         actualCol.appendChild(note);
       }
       if (r.status === 'mismatch') {
+        const actions = document.createElement('div');
+        actions.className = 'result-actions';
+        actions.style.display = 'inline-flex';
+        actions.style.gap = '4px';
+        actions.style.marginLeft = '8px';
+
         const fixBtn = document.createElement('button');
         fixBtn.className = 'btn btn-xs copy-fix-btn';
         fixBtn.textContent = 'Fix';
+        fixBtn.title = 'Copy to clipboard';
         fixBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           navigator.clipboard.writeText(r.sourceDeclaration || `${r.property}: ${r.sourceExpected ?? r.expected};`).then(() => {
@@ -876,7 +963,42 @@
             setTimeout(() => { fixBtn.textContent = 'Fix'; fixBtn.classList.remove('btn-success'); }, 1000);
           });
         });
-        actualCol.appendChild(fixBtn);
+        actions.appendChild(fixBtn);
+
+        const bridgeBtn = document.createElement('button');
+        bridgeBtn.className = 'btn btn-xs bridge-btn';
+        bridgeBtn.innerHTML = 'Locate';
+        bridgeBtn.title = 'Find in VS Code';
+        
+        bridgeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (bridgeBtn.classList.contains('loading')) return;
+
+          bridgeBtn.classList.add('loading');
+          bridgeBtn.textContent = 'Searching';
+          
+          const payload = { 
+            action: 'FIND_SELECTOR', 
+            selector: lastDiffReport.element,
+            property: r.property,
+            value: r.sourceExpected ?? r.expected
+          };
+
+          // Store reference for callback
+          bridgeBtn.dataset.activeSearch = 'true';
+
+          sendMessage({ action: 'BRIDGE_COMMAND', payload });
+          
+          // Fallback timeout
+          setTimeout(() => {
+            if (bridgeBtn.classList.contains('loading')) {
+              bridgeBtn.classList.remove('loading');
+              bridgeBtn.textContent = 'Timeout';
+            }
+          }, 3000);
+        });
+        actions.appendChild(bridgeBtn);
+        actualCol.appendChild(actions);
       }
     } else {
       const nA = document.createElement('span');

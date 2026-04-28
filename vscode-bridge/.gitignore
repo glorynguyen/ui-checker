@@ -1,0 +1,33 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# VS Code Extension
+.vscode-test/
+*.vsix
+out/
+dist/
+
+# Testing & Coverage
+coverage/
+.c8_output/
+.nyc_output/
+
+# OS Specific
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE Specific
+.idea/
+.project
+.settings/
+*.sublime-project
+*.sublime-workspace

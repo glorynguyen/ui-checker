@@ -3,3 +3,4 @@ extension.zip
 *.crx
 *.pem
 .DS_Store
+*.vsix

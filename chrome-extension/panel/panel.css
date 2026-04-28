@@ -198,8 +198,72 @@ body {
 
 .btn-sm {
   padding: 7px 12px;
-  font-size: 10px;
+  font-size: 13px;
 }
+
+.bridge-btn {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.bridge-btn.loading {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.bridge-btn.loading::after {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: bridge-rotate 0.8s linear infinite;
+}
+
+@keyframes bridge-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.bridge-btn.success {
+  background: #10b981 !important;
+  color: white !important;
+  border-color: #10b981 !important;
+}
+
+.element-info-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.bridge-btn-hero {
+  padding: 8px 16px !important;
+  font-size: 12px !important;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: var(--accent) !important;
+  color: #000 !important;
+  border-radius: 8px !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 14px rgba(55, 179, 255, 0.3);
+}
+
+.bridge-btn-hero:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(55, 179, 255, 0.4);
+}
+
+.bridge-btn-hero.loading {
+  background: var(--bg-hover) !important;
+  color: var(--text-dim) !important;
+}
+
 
 .btn-xs {
   padding: 5px 9px;

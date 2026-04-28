@@ -90,11 +90,16 @@
     </div>
 
     <div id="element-info" class="element-info hidden">
-      <div class="element-info-copy">
-        <span class="element-info-label">Selected Element</span>
-        <strong id="element-name"></strong>
+      <div class="element-info-header">
+        <div class="element-info-copy">
+          <span class="element-info-label">Active Selection</span>
+          <strong id="element-name"></strong>
+          <span class="text-muted" id="element-dims"></span>
+        </div>
+        <button id="header-locate-btn" class="btn btn-primary bridge-btn-hero" title="Open this component in VS Code">
+          <span>Locate in Editor</span>
+        </button>
       </div>
-      <span class="text-muted" id="element-dims"></span>
     </div>
   </div>
 
@@ -149,10 +154,17 @@
               </div>
             </label>
             <label class="setting-row">
-              <span>Border radius tolerance</span>
+              <span>Radius tolerance</span>
               <div class="setting-input-wrap">
-                <input type="number" id="tol-radius" class="input-field" value="2" min="0" max="10">
+                <input type="number" id="tol-radius" class="input-field" value="2" min="0" max="20">
                 <span class="setting-unit">px</span>
+              </div>
+            </label>
+            <label class="setting-row">
+              <span>Bridge Port</span>
+              <div class="setting-input-wrap">
+                <input type="number" id="bridge-port" class="input-field" value="3000" min="1024" max="65535">
+                <span class="setting-unit">port</span>
               </div>
             </label>
           </div>
