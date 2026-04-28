@@ -13,7 +13,7 @@ Connect your browser-based UI inspection tools directly to your VS Code workspac
 
 1. **Install from Marketplace:** Search for [**UI Checker Bridge**](https://marketplace.visualstudio.com/items?itemName=VinhNguyen-Vincent.ui-checker-bridge) in the VS Code Extensions view or click the link.
 2. Ensure you have the [**Figma CSS Diff**](https://chromewebstore.google.com/detail/figma-css-diff/khbnahljdhbiafecmjbojhpocmehhbjc) Chrome extension installed.
-3. The bridge starts automatically on port `3000`. You can change this in VS Code settings if needed.
+3. The bridge starts automatically on port `9876`. You can change this in VS Code settings if needed.
 
 ## 🧠 Smart Search Logic
 
@@ -25,7 +25,7 @@ The bridge uses a weighted scoring system to find the best match for your elemen
 
 ## ⚙️ Configuration
 
-- `ui-checker-bridge.port`: The WebSocket port (default: `3000`).
+- `ui-checker-bridge.port`: The WebSocket port (default: `9876`).
 - `ui-checker-bridge.autoTakeover`: Enable/disable automatic port claiming on window focus.
 
 ## 📄 License

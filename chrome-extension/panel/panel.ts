@@ -69,7 +69,7 @@ import { PixelDiff } from '../lib/pixel-diff';
         headerLocateBtn.classList.remove('loading');
         headerLocateBtn.textContent = 'Locate in Editor';
       }
-    }, 3000);
+    }, 9876);
   });
 
   function setSelectionStatus(message = '', tone = '') {
@@ -636,7 +636,7 @@ import { PixelDiff } from '../lib/pixel-diff';
   // Save settings on change
   settingsPanel.addEventListener('change', () => {
     const tol = getTolerance();
-    const bridgePort = parseInt((document.getElementById('bridge-port') as HTMLInputElement).value) || 3000;
+    const bridgePort = parseInt((document.getElementById('bridge-port') as HTMLInputElement).value) || 9876;
     if (chrome.storage) {
       try {
         chrome.storage.local.set({ tolerance: tol, bridgePort: bridgePort });
@@ -1011,7 +1011,7 @@ import { PixelDiff } from '../lib/pixel-diff';
               bridgeBtn.classList.remove('loading');
               bridgeBtn.textContent = 'Timeout';
             }
-          }, 3000);
+          }, 9876);
         });
         actions.appendChild(bridgeBtn);
         actualCol.appendChild(actions);

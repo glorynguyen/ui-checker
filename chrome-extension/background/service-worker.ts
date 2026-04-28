@@ -12,7 +12,7 @@ let bridgeSocket: WebSocket | null = null;
 
 async function connectToBridge() {
   const result = await chrome.storage.local.get(['bridgePort']);
-  const port = result.bridgePort || 3000;
+  const port = result.bridgePort || 9876;
 
   if (bridgeSocket && bridgeSocket.readyState === WebSocket.OPEN) return;
 

@@ -22,7 +22,7 @@ graph LR
 
 1.  **The Client (Chrome Extension):** Extracts CSS selectors and metadata from the DOM.
 2.  **The Relay (Service Worker):** Maintains a persistent WebSocket connection to the local machine.
-3.  **The Server (VS Code Extension):** A local WebSocket server (default port `3000`) that has full access to the project filesystem. Install it from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=VinhNguyen-Vincent.ui-checker-bridge).
+3.  **The Server (VS Code Extension):** A local WebSocket server (default port `9876`) that has full access to the project filesystem. Install it from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=VinhNguyen-Vincent.ui-checker-bridge).
 
 ---
 
@@ -34,7 +34,7 @@ When you pick an element or click "Locate," the extension generates a **Semantic
 *   It captures the tag name, all classes (including Tailwind utilities), and the ID.
 
 ### 2. Message Relay
-The DevTools panel sends a `BRIDGE_COMMAND` to the background Service Worker. The Service Worker wraps this into a JSON payload and transmits it over a local WebSocket (`ws://localhost:3000`).
+The DevTools panel sends a `BRIDGE_COMMAND` to the background Service Worker. The Service Worker wraps this into a JSON payload and transmits it over a local WebSocket (`ws://localhost:9876`).
 
 ### 3. Smart Search (The "Brain")
 Once the VS Code Bridge receives the selector, it doesn't just do a simple "Find." It runs a **Multi-Stage Confidence Search**:
@@ -71,7 +71,7 @@ The file with the highest score is selected. The extension uses the `vscode.wind
 ## Configuration
 
 ### Setting the Port
-By default, the Bridge uses port **3000**. If you have a port conflict:
+By default, the Bridge uses port **9876**. If you have a port conflict:
 
 1.  **In VS Code:** Go to `Settings > UI Checker Bridge > Port` and change to `3001`.
 2.  **In Chrome Extension:** Go to `Workspace Settings > Bridge Port` and change to `3001`.
@@ -84,7 +84,7 @@ The connection will automatically handshake and show a `$(zap)` icon in the VS C
 
 ### "Receiving end does not exist"
 This usually happens if the Chrome Extension was updated/reloaded but the target website hasn't been refreshed. 
-*   **Solution:** Refresh your browser tab (`localhost:3000`).
+*   **Solution:** Refresh your browser tab (`localhost:9876`).
 
 ### "Not Found" Feedback
 If the button turns red and says "Not Found," it means the Smart Search couldn't find a high-enough confidence match.

@@ -38,7 +38,7 @@
       "properties": {
         "ui-checker-bridge.port": {
           "type": "number",
-          "default": 3000,
+          "default": 9876,
           "description": "The port the WebSocket server will listen on for connections from the Chrome Extension."
         },
         "ui-checker-bridge.autoTakeover": {

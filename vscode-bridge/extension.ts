@@ -36,7 +36,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 function startBridgeServer() {
   const config = vscode.workspace.getConfiguration('ui-checker-bridge');
-  const port = config.get<number>('port') || 3000;
+  const port = config.get<number>('port') || 9876;
 
   if (server) {
     // If port is the same, just return

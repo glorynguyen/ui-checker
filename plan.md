@@ -61,7 +61,7 @@ Ship UI that matches the design without relying on eyeballing. The extension giv
 ### VS Code Integration (Bridge)
 
 - Dedicated [VS Code Extension](https://marketplace.visualstudio.com/items?itemName=VinhNguyen-Vincent.ui-checker-bridge) for navigation
-- Local WebSocket server (port 3000) for browser-to-editor communication
+- Local WebSocket server (port 9876) for browser-to-editor communication
 - Smart search algorithm with utility class filtering (Tailwind-aware)
 - High-confidence matching using IDs, unique classes, and active file focus
 
