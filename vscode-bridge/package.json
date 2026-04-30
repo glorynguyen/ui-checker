@@ -5,7 +5,7 @@
   "publisher": "VinhNguyen-Vincent",
   "author": "Vinh Nguyen (Vincent)",
   "icon": "icons/icon.png",
-  "version": "2.0.1",
+  "version": "2.2.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -49,13 +49,28 @@
         },
         "ui-checker-bridge.searchExtensions": {
           "type": "array",
-          "items": { "type": "string" },
-          "default": ["tsx", "jsx", "ts", "vue", "svelte", "astro", "html", "css", "scss", "less"],
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "tsx",
+            "jsx",
+            "ts",
+            "vue",
+            "svelte",
+            "astro",
+            "html",
+            "css",
+            "scss",
+            "less"
+          ],
           "description": "File extensions to search when matching CSS selectors to source files."
         },
         "ui-checker-bridge.additionalExcludePatterns": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "Extra glob patterns to exclude from search beyond .gitignore and the built-in safety list (node_modules, dist, .next, etc.)."
         },
