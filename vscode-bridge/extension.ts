@@ -1,8 +1,15 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';
 import { WebSocketServer, WebSocket } from 'ws';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
 import { SearchLogic, SearchMatch } from './search-logic';
+import { enumerateSearchableFiles, type FileEnumeratorDeps } from './file-enumerator';
+
+const vscodeDeps: FileEnumeratorDeps = {
+  getConfiguration: (s) => vscode.workspace.getConfiguration(s),
+  findFiles: (inc, exc) => vscode.workspace.findFiles(inc, exc),
+  readFile: (uri) => vscode.workspace.fs.readFile(uri as unknown as vscode.Uri),
+};
 
 let server: WebSocketServer | null = null;
 let statusBarItem: vscode.StatusBarItem;
@@ -58,11 +65,18 @@ function startBridgeServer() {
           console.log('[Bridge] Command:', data.action);
 
           if (data.action === 'FIND_SELECTOR') {
-            const matches = await findSelectorInWorkspace(data.selector);
+            // Fast path: runtime-stamped data-uic-loc gives us file:line:col directly.
+            const exact = data.sourceLoc ? resolveExactSourceLoc(data.sourceLoc) : null;
+
+            const matches = exact
+              ? [exact]
+              : await findSelectorInWorkspace(data.selector, data.property, data.value, data.ancestors, data.sourceName);
+
             ws.send(JSON.stringify({
               action: 'SELECTOR_RESULTS',
               selector: data.selector,
-              matches
+              matches,
+              exact: Boolean(exact)
             }));
 
             if (matches.length > 0) {
@@ -108,23 +122,60 @@ function updateStatus(connected: boolean, port: number, extra = '') {
   }
 }
 
-async function findSelectorInWorkspace(selector: string): Promise<SearchMatch[]> {
-  const tokens = selector.split(/(?=[.#])| /).map(t => t.trim()).filter(Boolean);
-  const results: SearchMatch[] = [];
-  
-  const files = await vscode.workspace.findFiles('**/*.{tsx,jsx,js,html,css,scss}', '**/node_modules/**');
-  const activeFile = vscode.window.activeTextEditor?.document.fileName || null;
+function tokenizeSelector(selector: string): string[] {
+  return selector.split(/(?=[.#])| /).map(t => t.trim()).filter(Boolean);
+}
 
-  for (const fileUri of files) {
-    try {
-      const content = fs.readFileSync(fileUri.fsPath, 'utf8');
-      const match = SearchLogic.scoreFile(fileUri.fsPath, content, tokens, activeFile);
-      if (match) {
-        results.push(match);
-      }
-    } catch (e) {
-      // ignore read errors
+// Resolve `data-uic-loc="path:line:col"` against each workspace folder. Returns
+// a single high-confidence match if the file exists; null otherwise so callers
+// fall back to fuzzy search.
+function resolveExactSourceLoc(sourceLoc: string): SearchMatch | null {
+  // Format: "<rel-or-abs-path>:<line>:<col>". Path may itself contain colons
+  // on Windows; line/col are always the trailing two numeric segments.
+  const m = sourceLoc.match(/^(.*):(\d+):(\d+)$/);
+  if (!m) return null;
+  const [, rawPath, lineStr] = m;
+  const line = parseInt(lineStr, 10);
+  if (!Number.isFinite(line)) return null;
+
+  const candidates: string[] = [];
+  if (path.isAbsolute(rawPath)) {
+    candidates.push(rawPath);
+  } else {
+    for (const folder of vscode.workspace.workspaceFolders ?? []) {
+      candidates.push(path.join(folder.uri.fsPath, rawPath));
     }
+  }
+
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+        return { file: candidate, line: Math.max(0, line - 1), score: 9999 };
+      }
+    } catch {
+      // ignore and try next candidate
+    }
+  }
+  return null;
+}
+
+async function findSelectorInWorkspace(
+  selector: string,
+  property?: string,
+  value?: string,
+  ancestors?: string[],
+  sourceName?: string | null
+): Promise<SearchMatch[]> {
+  const tokens = tokenizeSelector(selector);
+  const ancestorTokens = (ancestors ?? []).map(tokenizeSelector).filter(t => t.length > 0);
+  const activeFile = vscode.window.activeTextEditor?.document.fileName ?? null;
+
+  const files = await enumerateSearchableFiles(vscodeDeps);
+  const results: SearchMatch[] = [];
+
+  for (const { filePath, content } of files) {
+    const match = SearchLogic.scoreFile(filePath, content, tokens, activeFile, property, value, ancestorTokens, sourceName ?? undefined);
+    if (match) results.push(match);
   }
 
   return results.sort((a, b) => b.score - a.score).slice(0, 5);

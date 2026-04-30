@@ -1,0 +1,23 @@
+{
+  "name": "@ui-checker/runtime",
+  "version": "0.1.0",
+  "description": "Dev-only runtime that stamps DOM nodes with their React source location so ui-checker can jump to exact source.",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --outfile=dist/index.js --format=cjs --platform=browser && esbuild src/index.ts --bundle --outfile=dist/index.mjs --format=esm --platform=browser && tsc --emitDeclarationOnly --declaration --outDir dist src/index.ts"
+  },
+  "keywords": [
+    "react",
+    "devtools",
+    "ui-checker",
+    "source-location"
+  ],
+  "license": "MIT",
+  "sideEffects": true
+}

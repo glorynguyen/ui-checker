@@ -75,6 +75,39 @@
     return desc;
   }
 
+  // Walk up the DOM and collect up to MAX descriptors for ancestors that carry
+  // an id or at least one class. Bare-tag ancestors (e.g. a plain <div>) are
+  // skipped because they add no disambiguation signal — only structural noise.
+  function collectAncestors(el: HTMLElement, max = 2): string[] {
+    const out: string[] = [];
+    let cur = el.parentElement;
+    while (cur && out.length < max && cur !== document.documentElement) {
+      if (cur.id || cur.classList.length) {
+        out.push(getElementDescriptor(cur));
+      }
+      cur = cur.parentElement;
+    }
+    return out;
+  }
+
+  // Walk up the DOM (capped) to find the nearest element with a ui-checker
+  // source-location attribute. The clicked target is often a leaf primitive
+  // that React's dev runtime did not stamp directly; the wrapping component's
+  // host node typically carries the attribute.
+  function findNearestSourceLoc(el: HTMLElement, maxHops = 8): { sourceLoc: string | null; sourceName: string | null } {
+    let cur: HTMLElement | null = el;
+    let hops = 0;
+    while (cur && hops < maxHops) {
+      const loc = cur.getAttribute('data-uic-loc');
+      if (loc) {
+        return { sourceLoc: loc, sourceName: cur.getAttribute('data-uic-name') };
+      }
+      cur = cur.parentElement;
+      hops++;
+    }
+    return { sourceLoc: null, sourceName: null };
+  }
+
   function extractStyles(el: HTMLElement) {
     const computed = window.getComputedStyle(el);
     const rootComputed = window.getComputedStyle(document.documentElement);
@@ -85,10 +118,15 @@
       styles[prop] = computed.getPropertyValue(prop).trim();
     }
 
+    const { sourceLoc, sourceName } = findNearestSourceLoc(el);
+
     return {
       element: getElementDescriptor(el),
+      ancestors: collectAncestors(el),
       classList: Array.from(el.classList).join(' '),
       figmaId: el.dataset.figmaId || el.getAttribute('data-figma-id') || null,
+      sourceLoc,
+      sourceName,
       rootFontSize: parseFloat(rootComputed.fontSize) || 16,
       dimensions: {
         width: Math.round(rect.width),

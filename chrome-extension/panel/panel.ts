@@ -62,12 +62,23 @@ import { PixelDiff } from '../lib/pixel-diff';
     headerLocateBtn.classList.add('loading');
     headerLocateBtn.textContent = 'Searching';
     
+    const firstDiff = lastDiffReport?.diffs?.[0];
+    const payload: any = {
+      action: 'FIND_SELECTOR',
+      selector: extractedData.element,
+      ancestors: extractedData.ancestors ?? [],
+      sourceLoc: extractedData.sourceLoc ?? null,
+      sourceName: extractedData.sourceName ?? null
+    };
+
+    if (firstDiff) {
+      payload.property = firstDiff.property;
+      payload.value = firstDiff.sourceExpected ?? firstDiff.expected;
+    }
+    
     sendMessage({ 
       action: 'BRIDGE_COMMAND', 
-      payload: { 
-        action: 'FIND_SELECTOR', 
-        selector: extractedData.element 
-      } 
+      payload
     });
 
     setTimeout(() => {
@@ -225,7 +236,9 @@ import { PixelDiff } from '../lib/pixel-diff';
         if (msg.matches.length === 0) {
           setSelectionStatus('Selector not found in local workspace.', 'error');
         } else {
-          setSelectionStatus(`Opened ${msg.matches[0].file.split('/').pop()}`, 'success');
+          const fileName = msg.matches[0].file.split('/').pop();
+          const prefix = msg.exact ? 'Exact source: ' : 'Opened ';
+          setSelectionStatus(`${prefix}${fileName}`, 'success');
         }
       }
       
@@ -1062,9 +1075,12 @@ import { PixelDiff } from '../lib/pixel-diff';
           bridgeBtn.classList.add('loading');
           bridgeBtn.textContent = 'Searching';
           
-          const payload = { 
-            action: 'FIND_SELECTOR', 
+          const payload = {
+            action: 'FIND_SELECTOR',
             selector: lastDiffReport.element,
+            ancestors: extractedData?.ancestors ?? [],
+            sourceLoc: extractedData?.sourceLoc ?? null,
+            sourceName: extractedData?.sourceName ?? null,
             property: r.property,
             value: r.sourceExpected ?? r.expected
           };

@@ -23,7 +23,7 @@
   "main": "./dist/extension.js",
   "scripts": {
     "package": "vsce package",
-    "test": "tsx test-search.ts",
+    "test": "tsx test-search.ts && tsx test-file-enumerator.ts",
     "test:coverage": "c8 tsx test-search.ts",
     "release": "semantic-release"
   },
@@ -46,6 +46,23 @@
           "type": "boolean",
           "default": true,
           "description": "When enabled, this window will automatically take over the bridge port when it gains focus."
+        },
+        "ui-checker-bridge.searchExtensions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["tsx", "jsx", "ts", "vue", "svelte", "astro", "html", "css", "scss", "less"],
+          "description": "File extensions to search when matching CSS selectors to source files."
+        },
+        "ui-checker-bridge.additionalExcludePatterns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Extra glob patterns to exclude from search beyond .gitignore and the built-in safety list (node_modules, dist, .next, etc.)."
+        },
+        "ui-checker-bridge.maxFileSize": {
+          "type": "number",
+          "default": 1048576,
+          "description": "Files larger than this byte limit are skipped during search (default 1 MB). Prevents scoring minified bundles and lock files."
         }
       }
     }

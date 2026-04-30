@@ -5,7 +5,8 @@ Connect your browser-based UI inspection tools directly to your VS Code workspac
 ## 🚀 Features
 
 - **Locate in Code:** Click a "Locate" button in your browser to instantly open the correct file and line in VS Code.
-- **Smart Search:** Advanced scoring algorithm that understands Tailwind CSS, CSS Modules, and standard CSS classes.
+- **Exact Match:** When source location data is available (`data-uic-loc`), jumps directly to the exact file and line — no search needed.
+- **Smart Search:** Scores files by IDs, class names, ancestor context, and CSS property/value pairs. Tailwind utility classes are automatically filtered out so they don't pollute results.
 - **Multi-Window Support:** Intelligently follows your focus if you have multiple VS Code windows open.
 - **Auto-Takeover:** Automatically claims the bridge port when you switch projects.
 
@@ -15,18 +16,13 @@ Connect your browser-based UI inspection tools directly to your VS Code workspac
 2. Ensure you have the [**Figma CSS Diff**](https://chromewebstore.google.com/detail/figma-css-diff/khbnahljdhbiafecmjbojhpocmehhbjc) Chrome extension installed.
 3. The bridge starts automatically on port `9876`. You can change this in VS Code settings if needed.
 
-## 🧠 Smart Search Logic
-
-The bridge uses a weighted scoring system to find the best match for your element:
-- **ID Match:** 100 points
-- **Custom Class Match:** 20 points
-- **Active File Bonus:** 50 points
-- **Tailwind Aware:** Automatically filters out utility noise like `flex`, `p-4`, and `text-center` to find the unique component code.
-
 ## ⚙️ Configuration
 
 - `ui-checker-bridge.port`: The WebSocket port (default: `9876`).
 - `ui-checker-bridge.autoTakeover`: Enable/disable automatic port claiming on window focus.
+- `ui-checker-bridge.searchExtensions`: File extensions to search (default: `tsx jsx ts vue svelte astro html css scss less`).
+- `ui-checker-bridge.additionalExcludePatterns`: Extra glob patterns to exclude on top of the built-in list (`node_modules`, `dist`, `.next`, `coverage`, etc.). Example: `["**/storybook-static/**"]`.
+- `ui-checker-bridge.maxFileSize`: Files larger than this are skipped (default: `1048576` = 1 MB). Lower it to speed up search on large monorepos.
 
 ## 📄 License
 
