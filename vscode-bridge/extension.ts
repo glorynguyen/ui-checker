@@ -28,16 +28,72 @@ export function activate(context: vscode.ExtensionContext) {
   });
   context.subscriptions.push(startCommand);
 
+  const retakeCommand = vscode.commands.registerCommand('ui-checker-bridge.retakeServer', async () => {
+    statusBarItem.text = '$(sync~spin) Bridge: Retaking...';
+    statusBarItem.tooltip = undefined;
+    await retakePort();
+  });
+  context.subscriptions.push(retakeCommand);
+
   // Auto-start if configured
   startBridgeServer();
 
   // Listen for focus changes to handle "Auto Takeover" if multiple windows are open
   vscode.window.onDidChangeWindowState(async (e) => {
     const config = vscode.workspace.getConfiguration('ui-checker-bridge');
-    if (e.focused && config.get('autoTakeover')) {
+    if (e.focused && config.get('autoTakeover') && !server) {
       console.log('[Bridge] Window gained focus, taking over server...');
-      startBridgeServer();
+      await retakePort();
     }
+  });
+}
+
+// Ask the current port holder (another VS Code window running this extension)
+// to release the port, then bind ourselves. Falls back to a direct bind attempt
+// if no one answers within the timeout.
+async function retakePort() {
+  const config = vscode.workspace.getConfiguration('ui-checker-bridge');
+  const port = config.get<number>('port') || 9876;
+
+  if (server) {
+    server.close();
+    server = null;
+  }
+
+  await requestPortRelease(port);
+  // Brief delay so the OS fully releases the socket before we re-bind
+  setTimeout(() => startBridgeServer(), 150);
+}
+
+function requestPortRelease(port: number, timeoutMs = 1000): Promise<void> {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      try { client.terminate(); } catch { /* noop */ }
+      resolve();
+    };
+
+    let client: WebSocket;
+    try {
+      client = new WebSocket(`ws://127.0.0.1:${port}`);
+    } catch {
+      return resolve();
+    }
+
+    client.on('open', () => {
+      try { client.send(JSON.stringify({ action: 'RELEASE_PORT' })); } catch { /* noop */ }
+    });
+    client.on('message', (msg) => {
+      try {
+        const data = JSON.parse(msg.toString());
+        if (data.action === 'PORT_RELEASED') finish();
+      } catch { /* noop */ }
+    });
+    client.on('close', finish);
+    client.on('error', finish);
+    setTimeout(finish, timeoutMs);
   });
 }
 
@@ -63,6 +119,20 @@ function startBridgeServer() {
         try {
           const data = JSON.parse(message.toString());
           console.log('[Bridge] Command:', data.action);
+
+          if (data.action === 'RELEASE_PORT') {
+            console.log('[Bridge] Release requested by another window — closing server');
+            try { ws.send(JSON.stringify({ action: 'PORT_RELEASED' })); } catch { /* noop */ }
+            // Give the ack a moment to flush before closing
+            setTimeout(() => {
+              if (server) {
+                server.close();
+                server = null;
+              }
+              updateStatus(false, port, 'Off');
+            }, 50);
+            return;
+          }
 
           if (data.action === 'FIND_SELECTOR') {
             // Fast path: runtime-stamped data-uic-loc gives us file:line:col directly.
@@ -97,6 +167,8 @@ function startBridgeServer() {
     server.on('error', (err: any) => {
       if (err.code === 'EADDRINUSE') {
         console.warn(`[Bridge] Port ${port} in use, another VS Code window might have it.`);
+        // Close the failed server so the next retake attempt can bind fresh
+        if (server) { server.close(); server = null; }
         updateStatus(false, port, 'In Use');
       } else {
         console.error('[Bridge] Server error:', err);
@@ -116,9 +188,18 @@ function updateStatus(connected: boolean, port: number, extra = '') {
   if (connected) {
     statusBarItem.text = `$(zap) Bridge: Active (${port})`;
     statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.prominentBackground');
+    statusBarItem.command = 'ui-checker-bridge.startServer';
+    statusBarItem.tooltip = undefined;
+  } else if (extra === 'In Use') {
+    statusBarItem.text = `$(circle-slash) Bridge: In Use (${port})`;
+    statusBarItem.backgroundColor = undefined;
+    statusBarItem.command = 'ui-checker-bridge.retakeServer';
+    statusBarItem.tooltip = 'Click to retake port';
   } else {
     statusBarItem.text = `$(circle-slash) Bridge: ${extra || 'Listening'} (${port})`;
     statusBarItem.backgroundColor = undefined;
+    statusBarItem.command = 'ui-checker-bridge.startServer';
+    statusBarItem.tooltip = undefined;
   }
 }
 

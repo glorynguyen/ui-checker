@@ -32,6 +32,10 @@
       {
         "command": "ui-checker-bridge.startServer",
         "title": "Start UI Checker Bridge Server"
+      },
+      {
+        "command": "ui-checker-bridge.retakeServer",
+        "title": "Retake UI Checker Bridge Port"
       }
     ],
     "configuration": {
