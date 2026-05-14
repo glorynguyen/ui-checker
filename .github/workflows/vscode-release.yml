@@ -7,6 +7,10 @@ on:
     paths:
       - 'vscode-bridge/**'
 
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
 jobs:
   release:
     name: Release
@@ -19,6 +23,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
 
       - name: Setup Node
@@ -37,6 +42,11 @@ jobs:
       - name: Run Tests
         run: |
           cd vscode-bridge && npm run test:coverage
+
+      - name: Sync release branch
+        run: |
+          git fetch origin main --tags
+          git reset --hard origin/main
 
       - name: Release
         env:

@@ -5,6 +5,7 @@ on:
 
 jobs:
   publish:
+    if: startsWith(github.event.release.tag_name, 'v') && !startsWith(github.event.release.tag_name, 'vscode-bridge-')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
