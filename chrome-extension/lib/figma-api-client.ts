@@ -41,7 +41,8 @@ export class FigmaAPIClient {
   async getImage(nodeId: string, fileKey: string) {
     const encodedId = encodeURIComponent(nodeId);
     const data = await this._request(`/images/${fileKey}?ids=${encodedId}&format=png&scale=2`);
-    const imageUrl = data.images?.[nodeId] || data.images?.[Object.keys(data.images)[0]];
+    const images = data.images || {};
+    const imageUrl = images[nodeId] || images[Object.keys(images)[0]];
     if (!imageUrl) {
       throw new Error('Image render not available for this node');
     }

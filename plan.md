@@ -23,7 +23,7 @@ Ship UI that matches the design without relying on eyeballing. The extension giv
 | Figma API integration | Partially implemented | Personal access token auth, file key + node URL parsing, node fetch, image fetch, tab sync, short-term local cache |
 | Design token validation | Not implemented | No token import, token coverage, or token suggestions found |
 | AI vision comparison | Not implemented | No model integration or screenshot-to-LLM flow found |
-| CI/CD integration | Not implemented | No CLI, baseline workflow, CI report output, or GitHub Action found |
+| CI/CD integration | Partially implemented | Style-only CLI runner, config validation, and JSON/Markdown reports are implemented; no GitHub Action, PR comments, visual CI, or baseline approval yet |
 
 ---
 
@@ -149,16 +149,27 @@ Not found:
 
 ### Phase 6 — CI/CD Integration
 
-**Status:** Not implemented
+**Status:** Partially implemented
+
+Implemented:
+- Style-only CLI runner
+- JSON config validation
+- Headless Chrome computed-style extraction through the Chrome DevTools Protocol
+- Figma node fetch through the existing REST API client
+- Reuse of existing parser, normalizer, and diff engine
+- Failure-threshold classification
+- JSON and Markdown CI report generation
 
 Not found:
-- Headless CLI runner
 - Baseline storage and approval workflow
-- JSON or HTML CI artifact generation
-- GitHub Action or other CI integration for fidelity checks
+- HTML CI artifact generation
+- GitHub Action or other hosted CI wrapper
+- PR comment publishing
+- Visual screenshot/pixel-diff CI mode
 
 Notes:
 - The repo includes release tooling via `semantic-release`, but that is not the same as UI fidelity CI.
+- The first CI slice can run with `npm run ci:check -- --config ui-checker.config.json --json ui-checker-report.json --markdown ui-checker-report.md`.
 
 ---
 
@@ -196,6 +207,195 @@ chrome-extension/
 1. Finish Phase 3 by adding a real component mapping workflow and deeper Figma-to-DOM matching.
 2. Either implement batch comparison or remove it from product promises everywhere else too.
 3. Start Phase 4 with a simple token import plus hardcoded-value detection pass before attempting AI or CI work.
+
+---
+
+## CI/CD Check Plan
+
+### Why This Matters
+
+CI/CD checks are a bigger product win than manual Figma-to-DOM mapping for teams with stable component URLs, Storybook stories, or test pages. The goal is to move UI fidelity checks from an occasional DevTools workflow into a repeatable PR gate.
+
+The first version should be style-only. Screenshot and pixel-diff checks are valuable later, but they introduce more CI flakiness and setup cost.
+
+### MVP Scope
+
+Status: implemented for style-only checks.
+
+Build a local CLI runner that:
+
+- Reads a JSON config file.
+- Opens each target page in a headless browser.
+- Selects a DOM element with a stable selector.
+- Extracts the same curated computed styles used by the extension.
+- Fetches the matching Figma node through the Figma REST API.
+- Parses and normalizes both style sets with the existing parser and normalizer.
+- Runs the existing tolerance-aware diff engine.
+- Writes JSON and Markdown reports.
+- Exits non-zero when configured failure thresholds are exceeded.
+
+Out of scope for the MVP:
+
+- GitHub Action wrapper
+- PR comments
+- Screenshot/pixel diff
+- Baseline approval workflow
+- Automatic Figma-to-DOM discovery
+- Full browser extension integration
+
+### Config Shape
+
+Proposed `ui-checker.config.json`:
+
+```json
+{
+  "baseUrl": "http://localhost:6006",
+  "figmaTokenEnv": "FIGMA_TOKEN",
+  "tolerance": {
+    "spacing": 2,
+    "color": 5,
+    "borderRadius": 2
+  },
+  "failOn": {
+    "major": true,
+    "minorCount": 5,
+    "missing": true
+  },
+  "checks": [
+    {
+      "name": "Primary Button",
+      "path": "/iframe.html?id=button--primary",
+      "selector": "[data-testid='primary-button']",
+      "figmaFileKey": "abc123",
+      "figmaNodeId": "88:1204"
+    }
+  ]
+}
+```
+
+### CLI Contract
+
+Proposed command:
+
+```bash
+ui-checker-ci --config ui-checker.config.json --json ui-checker-report.json --markdown ui-checker-report.md
+```
+
+Expected behavior:
+
+- `0`: all checks pass within tolerance.
+- `1`: one or more checks fail thresholds.
+- `2`: invalid config, missing token, app unavailable, selector missing, or Figma fetch failure.
+
+### Implementation Steps
+
+1. **Create CLI package entry**
+   - Add a `cli/` or `runtime/ci/` entry point.
+   - Add a package script such as `npm run ci:check -- --config ui-checker.config.json`.
+   - Keep it Node-first and separate from Chrome extension code.
+
+2. **Define config types and validation**
+   - Validate `baseUrl`, `checks`, selector fields, Figma file key/node ID, and tolerance settings.
+   - Resolve the Figma token from the configured env var.
+   - Return clear config errors before opening a browser.
+
+3. **Add headless DOM extractor**
+   - Use Playwright or a similar browser runner.
+   - Open `baseUrl + path`.
+   - Wait for the selector.
+   - Extract computed styles using the same curated property list as the content script.
+   - Capture dimensions and URL metadata for reports.
+
+4. **Reuse Figma parsing path**
+   - Use the existing `FigmaAPIClient` to fetch node JSON.
+   - Use `FigmaParser.parse()` to convert node JSON into expected styles.
+   - Normalize expected and actual styles with `Normalizer.normalize()`.
+
+5. **Run diffs and classify check status**
+   - Use `DiffEngine.compare()`.
+   - Apply `failOn` thresholds.
+   - Track per-check pass/fail/error status.
+
+6. **Generate reports**
+   - JSON report for machines.
+   - Markdown report for CI artifacts and easy PR copy/paste.
+   - Include check name, URL, selector, Figma node, summary counts, and mismatch table.
+
+7. **Add tests**
+   - Unit test config validation.
+   - Unit test failure-threshold classification.
+   - Unit test report generation.
+   - Add one integration-style test with a static local HTML fixture if Playwright is available in dev dependencies.
+
+### Report Shape
+
+JSON report:
+
+```json
+{
+  "status": "failed",
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "errored": 0
+  },
+  "checks": [
+    {
+      "name": "Primary Button",
+      "status": "failed",
+      "selector": "[data-testid='primary-button']",
+      "figmaNodeId": "88:1204",
+      "diff": {
+        "matched": 12,
+        "mismatched": 2,
+        "missing": 0
+      }
+    }
+  ]
+}
+```
+
+Markdown report:
+
+```markdown
+## UI Checker CI Report
+
+Status: failed
+
+| Check | Status | Matched | Mismatched | Missing |
+|---|---|---:|---:|---:|
+| Primary Button | failed | 12 | 2 | 0 |
+
+### Primary Button
+
+Selector: `[data-testid='primary-button']`
+Figma node: `88:1204`
+
+| Property | Expected | Actual | Severity |
+|---|---|---|---|
+| padding-left | 16px | 12px | major |
+```
+
+### Recommended Follow-Up Phases
+
+1. **GitHub Action wrapper**
+   - Package the CLI into a simple reusable action.
+   - Upload JSON/Markdown as artifacts.
+
+2. **PR comments**
+   - Post the Markdown summary on pull requests.
+   - Keep detailed JSON/HTML as artifacts.
+
+3. **Baseline approval**
+   - Store accepted mismatches.
+   - Fail only on new or worsened diffs.
+
+4. **Visual diff mode**
+   - Add screenshot capture and Figma image comparison after style-only checks are stable.
+
+5. **Mapping reuse**
+   - Allow extension-saved mappings to export into CI config.
 
 ---
 

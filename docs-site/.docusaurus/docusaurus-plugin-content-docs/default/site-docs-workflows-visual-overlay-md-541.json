@@ -1,0 +1,26 @@
+{
+  "id": "workflows/visual-overlay",
+  "title": "Visual Overlay",
+  "description": "The visual overlay workflow compares screenshots instead of only CSS declarations.",
+  "source": "@site/docs/workflows/visual-overlay.md",
+  "sourceDirName": "workflows",
+  "slug": "/workflows/visual-overlay",
+  "permalink": "/workflows/visual-overlay",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "id": "visual-overlay",
+    "title": "Visual Overlay"
+  },
+  "sidebar": "mainSidebar",
+  "previous": {
+    "title": "Compare Elements",
+    "permalink": "/workflows/compare-elements"
+  },
+  "next": {
+    "title": "Design Tokens",
+    "permalink": "/design-tokens"
+  }
+}

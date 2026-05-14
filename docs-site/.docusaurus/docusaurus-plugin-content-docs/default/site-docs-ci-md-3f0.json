@@ -1,0 +1,26 @@
+{
+  "id": "ci",
+  "title": "CI Runner",
+  "description": "The CI runner executes style checks outside the Chrome extension. It is useful for Storybook pages, component preview routes, and stable test pages.",
+  "source": "@site/docs/ci.md",
+  "sourceDirName": ".",
+  "slug": "/ci",
+  "permalink": "/ci",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "id": "ci",
+    "title": "CI Runner"
+  },
+  "sidebar": "mainSidebar",
+  "previous": {
+    "title": "VS Code Bridge",
+    "permalink": "/vscode-bridge"
+  },
+  "next": {
+    "title": "Architecture",
+    "permalink": "/architecture"
+  }
+}

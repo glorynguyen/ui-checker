@@ -7,6 +7,7 @@ A Chrome DevTools extension that helps frontend developers catch visual discrepa
 ## Key Features
 
 - **Direct Figma Integration**: Fetch live design data directly from the Figma REST API — no proxy or bridge server required.
+- **Figma Fetch Cache**: Reuse recently fetched node specs and rendered image URLs for faster repeat comparisons, with **Refresh Live** when you need fresh design data.
 - **Smart URL Parsing**: Paste a full Figma URL and the tool automatically extracts the File Key and Node ID.
 - **Visual Element Picker**: Hover-highlight and click-select elements on your page to extract 40+ computed styles.
 - **One-Click Fixes**: Click the "Fix" button next to any mismatch to copy the correct Figma CSS to your clipboard.
@@ -42,18 +43,20 @@ A Chrome DevTools extension that helps frontend developers catch visual discrepa
 
 ### Basic Workflow
 1. **Pick**: Click "Pick Element" and select a component on your webpage.
-2. **Fetch**: Paste a Figma URL (or Node ID) into the "Figma Node ID" field and click **Fetch**.
+2. **Fetch**: Paste a Figma URL (or Node ID) into the "Figma Node ID" field and click **Fetch Spec**. Repeat fetches use the local cache when available.
 3. **Compare**: Review the diff report. Mismatches are highlighted by severity (Major/Minor).
 4. **Fix**: Click the **Fix** button to copy the correct CSS for a mismatched property.
 
 ### Visual Comparison
 1. In the **Visual Overlay** section, click **Capture** to grab a screenshot of your selected element.
-2. Drag and drop a screenshot from Figma into the drop zone.
+2. Fetch a Figma node to auto-load the rendered Figma image, or drag and drop a screenshot from Figma into the drop zone.
 3. Use the **Opacity Slider** to blend the two images or switch to **Diff** mode to see a pixel-level heatmap of differences.
 
 ### Tips
 - **URL Support**: You don't need to hunt for Node IDs. Just paste the full URL from your browser's address bar when you have the layer selected in Figma.
 - **Tab Sync**: Click the **Sync** button to auto-detect the File Key and Node ID from an open Figma browser tab.
+- **Cache Status**: The panel shows whether the spec and image came from cache or a fresh Figma request.
+- **Refresh Live**: Click **Refresh Live** to bypass the cache and refetch the current node spec and rendered image from Figma.
 - **Persistence**: Your settings (Token, File Key, Tolerances) are saved automatically.
 - **Filtering**: Use the search box in the results panel to filter properties by name.
 
@@ -61,7 +64,7 @@ A Chrome DevTools extension that helps frontend developers catch visual discrepa
 
 ## Architecture
 
-The extension communicates directly with the Figma REST API (`api.figma.com`) from the service worker. No proxy, bridge server, or external dependencies are required.
+The extension communicates directly with the Figma REST API (`api.figma.com`) from the service worker. No proxy, bridge server, or external dependencies are required. The service worker caches recent Figma node specs and rendered image URLs in `chrome.storage.local`, keyed by Figma file key and node ID. The cache is bypassed when the panel sends a **Refresh Live** request.
 
 ```
 DevTools Panel  -->  Service Worker  -->  https://api.figma.com/v1/...

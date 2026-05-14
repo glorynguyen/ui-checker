@@ -182,6 +182,34 @@
             </div>
           </div>
         </section>
+
+        <section id="section-tokens" class="settings-card settings-card-wide collapsible-section">
+          <div class="settings-card-header">
+            <div class="header-main">
+              <div class="title-wrap">
+                <span class="caret">▶</span>
+                <div class="section-title">Design Tokens</div>
+              </div>
+              <p class="section-description">Import JSON tokens to flag hardcoded Figma values and show closest token suggestions.</p>
+            </div>
+          </div>
+
+          <div class="collapsible-content">
+            <div class="mapping-stack">
+              <div class="mapping-controls">
+                <label class="btn mapping-import-label">
+                  Import Tokens
+                  <input type="file" id="token-import-input" accept=".json,application/json" hidden>
+                </label>
+                <button id="token-clear-btn" class="btn" disabled>Clear</button>
+              </div>
+              <div id="token-status" class="config-meta">No token file loaded</div>
+              <div class="config-hint">
+                Supports flat JSON and W3C-style tokens using <b>$value</b> or <b>value</b>.
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   </div>

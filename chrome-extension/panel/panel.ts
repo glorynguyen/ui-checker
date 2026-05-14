@@ -4,6 +4,7 @@ import { FigmaParser, ParsedStyles } from '../lib/figma-parser';
 import { Normalizer } from '../lib/normalizer';
 import { DiffEngine, DiffReport, DiffResult } from '../lib/diff-engine';
 import { PixelDiff } from '../lib/pixel-diff';
+import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator';
 
 (function () {
   // --- DOM refs ---
@@ -42,6 +43,9 @@ import { PixelDiff } from '../lib/pixel-diff';
   const mappingImportInput = document.getElementById('mapping-import-input') as HTMLInputElement;
   const resultsFilter = document.getElementById('results-filter') as HTMLInputElement;
   const figmaCacheStatus = document.getElementById('figma-cache-status') as HTMLElement;
+  const tokenImportInput = document.getElementById('token-import-input') as HTMLInputElement;
+  const tokenClearBtn = document.getElementById('token-clear-btn') as HTMLButtonElement;
+  const tokenStatus = document.getElementById('token-status') as HTMLElement;
 
   // --- State ---
   let extractedData: any = null; // { element, dimensions, styles }
@@ -52,6 +56,7 @@ import { PixelDiff } from '../lib/pixel-diff';
   let currentFigmaRequestId = 0;
   let figmaFetchPending = 0;
   let figmaSpecHighlightTimer: number | null = null;
+  let designTokens: DesignToken[] = [];
 
   const headerLocateBtn = document.getElementById('header-locate-btn') as HTMLButtonElement;
 
@@ -283,7 +288,22 @@ import { PixelDiff } from '../lib/pixel-diff';
         markFigmaFetchComplete();
         // Silently fail or show a subtle hint that visual overlay won't auto-load
       } else if (msg.action === 'FIGMA_TAB_SYNCED') {
-        if (msg.url) {
+        if (msg.fileKey || msg.nodeId) {
+          if (msg.fileKey) {
+            mcpFileKeyInput.value = msg.fileKey;
+            chrome.storage.local.get(['figmaConfig'], (res) => {
+              const newConfig = { ...(res.figmaConfig || {}), fileKey: msg.fileKey };
+              chrome.storage.local.set({ figmaConfig: newConfig });
+            });
+          }
+          if (msg.nodeId) {
+            mcpNodeIdInput.value = msg.nodeId;
+          }
+          console.log('[Panel] Synced from Figma tab:', msg);
+          if (msg.fileKey && msg.nodeId && mcpTokenInput.value.trim()) {
+            fetchFigmaNodeWithOptions(msg.nodeId, { forceRefresh: false });
+          }
+        } else if (msg.url) {
           const parsed = parseFigmaUrl(msg.url);
           if (parsed) {
             if (parsed.fileKey) {
@@ -701,9 +721,68 @@ import { PixelDiff } from '../lib/pixel-diff';
     };
   }
 
+  function renderTokenStatus(message?: string, tone: 'default' | 'error' | 'success' = 'default') {
+    if (!tokenStatus) return;
+
+    tokenStatus.classList.remove('status-error', 'status-success');
+    if (tone === 'error') tokenStatus.classList.add('status-error');
+    if (tone === 'success') tokenStatus.classList.add('status-success');
+
+    if (message) {
+      tokenStatus.textContent = message;
+    } else if (designTokens.length > 0) {
+      tokenStatus.textContent = `${designTokens.length} tokens loaded`;
+    } else {
+      tokenStatus.textContent = 'No token file loaded';
+    }
+
+    if (tokenClearBtn) tokenClearBtn.disabled = designTokens.length === 0;
+  }
+
+  function saveDesignTokens(tokens: DesignToken[]) {
+    designTokens = tokens;
+    renderTokenStatus(undefined, tokens.length > 0 ? 'success' : 'default');
+    if (chrome.storage) {
+      try {
+        chrome.storage.local.set({ designTokens: tokens });
+      } catch (e: any) {
+        checkContext(e);
+      }
+    }
+  }
+
+  tokenImportInput?.addEventListener('change', async () => {
+    const file = tokenImportInput.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const tokens = DesignTokenValidator.parse(text);
+      saveDesignTokens(tokens);
+      renderTokenStatus(`${tokens.length} tokens loaded from ${file.name}`, 'success');
+      if (lastDiffReport) runComparison();
+    } catch (e: any) {
+      renderTokenStatus(e?.message ? `Import failed: ${e.message}` : 'Import failed: invalid token JSON', 'error');
+    } finally {
+      tokenImportInput.value = '';
+    }
+  });
+
+  tokenClearBtn?.addEventListener('click', () => {
+    saveDesignTokens([]);
+    if (chrome.storage) {
+      try {
+        chrome.storage.local.remove('designTokens');
+      } catch (e: any) {
+        checkContext(e);
+      }
+    }
+    if (lastDiffReport) runComparison();
+  });
+
   // Load saved settings
   if (chrome.storage) {
-    chrome.storage.local.get(['tolerance', 'bridgePort'], (result) => {
+    chrome.storage.local.get(['tolerance', 'bridgePort', 'designTokens'], (result) => {
       if (result.tolerance) {
         if (result.tolerance.spacing !== undefined) (document.getElementById('tol-spacing') as HTMLInputElement).value = result.tolerance.spacing;
         if (result.tolerance.color !== undefined) (document.getElementById('tol-color') as HTMLInputElement).value = result.tolerance.color;
@@ -712,7 +791,13 @@ import { PixelDiff } from '../lib/pixel-diff';
       if (result.bridgePort) {
         (document.getElementById('bridge-port') as HTMLInputElement).value = result.bridgePort;
       }
+      if (Array.isArray(result.designTokens)) {
+        designTokens = result.designTokens;
+      }
+      renderTokenStatus();
     });
+  } else {
+    renderTokenStatus();
   }
 
   // Save settings on change
@@ -753,16 +838,28 @@ import { PixelDiff } from '../lib/pixel-diff';
 
     const tolerance = getTolerance();
     const baseReport = DiffEngine.compare(normalizedFigma, normalizedBrowser, tolerance);
+    const enrichedResults = baseReport.results.map((result: any) => {
+      const sourceExpected = rawFigmaStyles[result.property] ?? result.expected;
+      const varInfo = currentVarMap[result.property];
+      const tokenValidation = DesignTokenValidator.validateProperty(
+        result.property,
+        result.expected,
+        designTokens,
+        varInfo?.varName
+      );
+
+      return {
+        ...result,
+        sourceExpected,
+        sourceDeclaration: sourceDeclarations[result.property] || `${result.property}: ${sourceExpected};`,
+        tokenValidation
+      };
+    });
+
     const report = {
       ...baseReport,
-      results: baseReport.results.map((result: any) => {
-        const sourceExpected = rawFigmaStyles[result.property] ?? result.expected;
-        return {
-          ...result,
-          sourceExpected,
-          sourceDeclaration: sourceDeclarations[result.property] || `${result.property}: ${sourceExpected};`
-        };
-      })
+      results: enrichedResults,
+      tokenSummary: DesignTokenValidator.summarizeValidations(enrichedResults.map((result: any) => result.tokenValidation))
     };
 
     lastDiffReport = {
@@ -794,14 +891,18 @@ import { PixelDiff } from '../lib/pixel-diff';
     const s = lastDiffReport.summary;
     lines.push('### Comparison Summary');
     lines.push(`${s.mismatched} mismatches · ${s.missing ?? 0} missing · ${s.matched} matched (${s.total} total)`);
+    if (lastDiffReport.tokenSummary?.total > 0) {
+      const ts = lastDiffReport.tokenSummary;
+      lines.push(`Token coverage: ${ts.tokenized}/${ts.total} tokenized (${ts.coveragePercent}%), ${ts.hardcoded} hardcoded, ${ts.unmapped} unmapped`);
+    }
     lines.push('');
 
     if (mismatches.length > 0) {
       lines.push('### Mismatches');
-      lines.push('| Property | Expected (Figma) | Actual (DOM) | Severity |');
-      lines.push('|---|---|---|---|');
+      lines.push('| Property | Expected (Figma) | Actual (DOM) | Severity | Token |');
+      lines.push('|---|---|---|---|---|');
       for (const r of mismatches) {
-        lines.push(`| ${r.property} | ${r.sourceExpected ?? r.expected ?? '—'} | ${r.actual ?? '—'} | ${r.severity || r.status} |`);
+        lines.push(`| ${r.property} | ${r.sourceExpected ?? r.expected ?? '—'} | ${r.actual ?? '—'} | ${r.severity || r.status} | ${formatTokenReportValue(r)} |`);
       }
       lines.push('');
     }
@@ -871,6 +972,10 @@ import { PixelDiff } from '../lib/pixel-diff';
     appendStat(resultsSummary, 'Matched', s.matched, 'stat-matched');
     appendStat(resultsSummary, 'Mismatched', s.mismatched, 'stat-mismatched');
     appendStat(resultsSummary, 'Missing', s.missing, 'stat-missing');
+    const tokenSummary = (report as any).tokenSummary;
+    if (tokenSummary?.total > 0) {
+      appendStat(resultsSummary, 'Tokenized', `${tokenSummary.tokenized}/${tokenSummary.total}`, 'stat-tokenized');
+    }
 
     // Build result list
     resultsList.textContent = '';
@@ -1013,12 +1118,14 @@ import { PixelDiff } from '../lib/pixel-diff';
       val.textContent = displayValue;
       expectedCol.appendChild(val);
       expectedCol.appendChild(createColorSwatch(r.property, displayValue));
+      appendTokenValidation(expectedCol, r);
     } else {
       const label = document.createElement('span');
       label.className = 'result-label';
       label.textContent = 'exp';
       expectedCol.appendChild(label);
       expectedCol.appendChild(createValueElement(r.sourceExpected ?? r.expected, ''));
+      appendTokenValidation(expectedCol, r);
     }
     row.appendChild(expectedCol);
 
@@ -1112,6 +1219,39 @@ import { PixelDiff } from '../lib/pixel-diff';
     return row;
   }
 
+  function appendTokenValidation(parent: HTMLElement, r: any) {
+    const validation = r.tokenValidation;
+    if (!validation) return;
+
+    if (validation.status === 'tokenized' && validation.token) {
+      const chip = document.createElement('span');
+      chip.className = 'token-chip token-chip--ok';
+      chip.title = `Matched token: ${validation.token.path}`;
+      chip.textContent = validation.token.path;
+      parent.appendChild(chip);
+      return;
+    }
+
+    if (validation.status === 'hardcoded' && validation.token) {
+      const chip = document.createElement('span');
+      chip.className = 'token-chip token-chip--warning';
+      chip.title = `Hardcoded value matches token ${validation.token.path}`;
+      chip.textContent = `use ${validation.token.path}`;
+      parent.appendChild(chip);
+      return;
+    }
+
+    if (validation.suggestions?.length > 0) {
+      const chip = document.createElement('span');
+      chip.className = 'token-chip token-chip--suggestion';
+      chip.title = validation.suggestions
+        .map((token: DesignToken) => `${token.path}: ${token.value}`)
+        .join('\n');
+      chip.textContent = `near ${validation.suggestions[0].path}`;
+      parent.appendChild(chip);
+    }
+  }
+
   function createValueElement(value: string, className: string) {
     const el = document.createElement('span');
     el.className = 'result-value ' + className;
@@ -1130,6 +1270,15 @@ import { PixelDiff } from '../lib/pixel-diff';
     return el;
   }
 
+  function formatTokenReportValue(result: any) {
+    const validation = result.tokenValidation;
+    if (!validation) return 'n/a';
+    if (validation.status === 'tokenized' && validation.token) return validation.token.path;
+    if (validation.status === 'hardcoded' && validation.token) return `hardcoded; use ${validation.token.path}`;
+    if (validation.suggestions?.length > 0) return `closest: ${validation.suggestions.map((token: DesignToken) => token.path).join(', ')}`;
+    return 'unmapped';
+  }
+
   // --- Copy Report ---
   copyBtn.addEventListener('click', () => {
     if (!lastDiffReport) return;
@@ -1141,13 +1290,16 @@ import { PixelDiff } from '../lib/pixel-diff';
     let md = `## Style Diff Report\n`;
     md += `**Element:** \`${r.element}\` (${r.dimensions.width} x ${r.dimensions.height})\n`;
     md += `**Date:** ${new Date().toISOString().slice(0, 10)}\n\n`;
+    if (r.tokenSummary?.total > 0) {
+      md += `**Token coverage:** ${r.tokenSummary.tokenized}/${r.tokenSummary.total} tokenized (${r.tokenSummary.coveragePercent}%), ${r.tokenSummary.hardcoded} hardcoded, ${r.tokenSummary.unmapped} unmapped\n\n`;
+    }
 
     if (mismatches.length > 0) {
       md += `### Mismatches (${mismatches.length})\n`;
-      md += `| Property | Expected (Figma) | Actual (Browser) | Severity |\n`;
-      md += `|----------|-----------------|------------------|----------|\n`;
+      md += `| Property | Expected (Figma) | Actual (Browser) | Severity | Token |\n`;
+      md += `|----------|-----------------|------------------|----------|-------|\n`;
       for (const m of mismatches) {
-        md += `| ${m.property} | ${m.sourceExpected ?? m.expected} | ${m.actual ?? 'n/a'} | ${m.severity} |\n`;
+        md += `| ${m.property} | ${m.sourceExpected ?? m.expected} | ${m.actual ?? 'n/a'} | ${m.severity} | ${formatTokenReportValue(m)} |\n`;
       }
       md += '\n';
     }

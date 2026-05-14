@@ -1,0 +1,98 @@
+{
+  "/__docusaurus/debug-5ff": {
+    "__comp": "__comp---theme-debug-config-23-a-2ff",
+    "__context": {
+      "plugin": "plugin---docusaurus-debugb-38-ad3"
+    }
+  },
+  "/__docusaurus/debug/config-5ba": {
+    "__comp": "__comp---theme-debug-config-23-a-2ff",
+    "__context": {
+      "plugin": "plugin---docusaurus-debugb-38-ad3"
+    }
+  },
+  "/__docusaurus/debug/content-a2b": {
+    "__comp": "__comp---theme-debug-contentba-8-ce7",
+    "__context": {
+      "plugin": "plugin---docusaurus-debugb-38-ad3"
+    },
+    "__props": "__props---docusaurus-debug-content-3-c-0-be2"
+  },
+  "/__docusaurus/debug/globalData-c3c": {
+    "__comp": "__comp---theme-debug-global-dataede-0fa",
+    "__context": {
+      "plugin": "plugin---docusaurus-debugb-38-ad3"
+    }
+  },
+  "/__docusaurus/debug/metadata-156": {
+    "__comp": "__comp---theme-debug-site-metadata-68-e-3d4",
+    "__context": {
+      "plugin": "plugin---docusaurus-debugb-38-ad3"
+    }
+  },
+  "/__docusaurus/debug/registry-88c": {
+    "__comp": "__comp---theme-debug-registry-679-501",
+    "__context": {
+      "plugin": "plugin---docusaurus-debugb-38-ad3"
+    }
+  },
+  "/__docusaurus/debug/routes-000": {
+    "__comp": "__comp---theme-debug-routes-946-699",
+    "__context": {
+      "plugin": "plugin---docusaurus-debugb-38-ad3"
+    }
+  },
+  "/-e1f": {
+    "__comp": "__comp---theme-docs-root-5-e-9-0b6",
+    "__context": {
+      "plugin": "plugin---aba-d70"
+    }
+  },
+  "/-302": {
+    "__comp": "__comp---theme-doc-version-roota-7-b-5de",
+    "__props": "__props---22-d-307"
+  },
+  "/-4a9": {
+    "__comp": "__comp---theme-doc-roota-94-67a"
+  },
+  "/architecture-67c": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---architecture-528-630"
+  },
+  "/ci-568": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---ci-3-f-0-93d"
+  },
+  "/design-tokens-832": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---design-tokensf-26-aab"
+  },
+  "/figma-integration-146": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---figma-integration-554-a53"
+  },
+  "/installation-bea": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---installation-3-b-8-fd1"
+  },
+  "/troubleshooting-391": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---troubleshooting-9-d-9-b37"
+  },
+  "/vscode-bridge-6b1": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---vscode-bridge-097-bbd"
+  },
+  "/workflows/compare-elements-fa6": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---workflows-compare-elements-5-bd-198"
+  },
+  "/workflows/visual-overlay-718": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---workflows-visual-overlay-541-74a"
+  },
+  "/-e98": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---0-e-3-279"
+  }
+}

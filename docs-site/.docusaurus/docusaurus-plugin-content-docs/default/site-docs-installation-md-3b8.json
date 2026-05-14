@@ -1,0 +1,26 @@
+{
+  "id": "installation",
+  "title": "Installation",
+  "description": "Prerequisites",
+  "source": "@site/docs/installation.md",
+  "sourceDirName": ".",
+  "slug": "/installation",
+  "permalink": "/installation",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "id": "installation",
+    "title": "Installation"
+  },
+  "sidebar": "mainSidebar",
+  "previous": {
+    "title": "UI Checker",
+    "permalink": "/"
+  },
+  "next": {
+    "title": "Figma Integration",
+    "permalink": "/figma-integration"
+  }
+}

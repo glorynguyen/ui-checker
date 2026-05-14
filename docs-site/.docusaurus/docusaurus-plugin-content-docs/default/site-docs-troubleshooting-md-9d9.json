@@ -1,0 +1,22 @@
+{
+  "id": "troubleshooting",
+  "title": "Troubleshooting",
+  "description": "Extension Panel Does Not Appear",
+  "source": "@site/docs/troubleshooting.md",
+  "sourceDirName": ".",
+  "slug": "/troubleshooting",
+  "permalink": "/troubleshooting",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "id": "troubleshooting",
+    "title": "Troubleshooting"
+  },
+  "sidebar": "mainSidebar",
+  "previous": {
+    "title": "Architecture",
+    "permalink": "/architecture"
+  }
+}

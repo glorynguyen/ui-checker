@@ -1,0 +1,78 @@
+{
+  "docusaurus-plugin-content-docs": {
+    "default": {
+      "path": "/",
+      "versions": [
+        {
+          "name": "current",
+          "label": "Next",
+          "isLast": true,
+          "path": "/",
+          "mainDocId": "intro",
+          "docs": [
+            {
+              "id": "architecture",
+              "path": "/architecture",
+              "sidebar": "mainSidebar"
+            },
+            {
+              "id": "ci",
+              "path": "/ci",
+              "sidebar": "mainSidebar"
+            },
+            {
+              "id": "design-tokens",
+              "path": "/design-tokens",
+              "sidebar": "mainSidebar"
+            },
+            {
+              "id": "figma-integration",
+              "path": "/figma-integration",
+              "sidebar": "mainSidebar"
+            },
+            {
+              "id": "installation",
+              "path": "/installation",
+              "sidebar": "mainSidebar"
+            },
+            {
+              "id": "intro",
+              "path": "/",
+              "sidebar": "mainSidebar"
+            },
+            {
+              "id": "troubleshooting",
+              "path": "/troubleshooting",
+              "sidebar": "mainSidebar"
+            },
+            {
+              "id": "vscode-bridge",
+              "path": "/vscode-bridge",
+              "sidebar": "mainSidebar"
+            },
+            {
+              "id": "workflows/compare-elements",
+              "path": "/workflows/compare-elements",
+              "sidebar": "mainSidebar"
+            },
+            {
+              "id": "workflows/visual-overlay",
+              "path": "/workflows/visual-overlay",
+              "sidebar": "mainSidebar"
+            }
+          ],
+          "draftIds": [],
+          "sidebars": {
+            "mainSidebar": {
+              "link": {
+                "path": "/",
+                "label": "intro"
+              }
+            }
+          }
+        }
+      ],
+      "breadcrumbs": true
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "id": "architecture",
+  "title": "Architecture",
+  "description": "UI Checker is split into browser extension code, shared comparison logic, optional editor integration, and CI tooling.",
+  "source": "@site/docs/architecture.md",
+  "sourceDirName": ".",
+  "slug": "/architecture",
+  "permalink": "/architecture",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "id": "architecture",
+    "title": "Architecture"
+  },
+  "sidebar": "mainSidebar",
+  "previous": {
+    "title": "CI Runner",
+    "permalink": "/ci"
+  },
+  "next": {
+    "title": "Troubleshooting",
+    "permalink": "/troubleshooting"
+  }
+}

@@ -36,6 +36,10 @@
       {
         "command": "ui-checker-bridge.retakeServer",
         "title": "Retake UI Checker Bridge Port"
+      },
+      {
+        "command": "ui-checker-bridge.setupRuntime",
+        "title": "Setup UI Checker Runtime (Install & Import)"
       }
     ],
     "configuration": {

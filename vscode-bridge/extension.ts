@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import { spawn } from 'node:child_process';
 import { WebSocketServer, WebSocket } from 'ws';
 import { SearchLogic, SearchMatch } from './search-logic';
 import { enumerateSearchableFiles, type FileEnumeratorDeps } from './file-enumerator';
@@ -34,6 +35,11 @@ export function activate(context: vscode.ExtensionContext) {
     await retakePort();
   });
   context.subscriptions.push(retakeCommand);
+
+  const setupRuntimeCommand = vscode.commands.registerCommand('ui-checker-bridge.setupRuntime', async () => {
+    await setupRuntime();
+  });
+  context.subscriptions.push(setupRuntimeCommand);
 
   // Auto-start if configured
   startBridgeServer();
@@ -269,6 +275,125 @@ async function openMatch(match: SearchMatch) {
   const pos = new vscode.Position(match.line, 0);
   editor.selection = new vscode.Selection(pos, pos);
   editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
+}
+
+async function setupRuntime() {
+  const folders = vscode.workspace.workspaceFolders;
+  if (!folders || folders.length === 0) {
+    vscode.window.showErrorMessage('[UI Checker] No workspace folder open.');
+    return;
+  }
+
+  const root = folders[0].uri;
+
+  try {
+    await vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: "Setting up UI Checker Runtime",
+      cancellable: false
+    }, async (progress) => {
+      progress.report({ message: "Detecting package manager..." });
+      const pkgManager = await detectPackageManager(root);
+      
+      progress.report({ message: `Installing @ui-checker/runtime using ${pkgManager}...` });
+      await installRuntime(root, pkgManager);
+
+      progress.report({ message: "Injecting import into entry point..." });
+      await injectImport(root);
+    });
+
+    vscode.window.showInformationMessage('[UI Checker] Runtime setup complete! @ui-checker/runtime installed and imported.');
+  } catch (error: any) {
+    vscode.window.showErrorMessage(`[UI Checker] Setup failed: ${error.message}`);
+  }
+}
+
+async function detectPackageManager(root: vscode.Uri): Promise<'npm' | 'yarn' | 'pnpm'> {
+  const hasYarn = fs.existsSync(path.join(root.fsPath, 'yarn.lock'));
+  if (hasYarn) return 'yarn';
+  const hasPnpm = fs.existsSync(path.join(root.fsPath, 'pnpm-lock.yaml'));
+  if (hasPnpm) return 'pnpm';
+  return 'npm';
+}
+
+async function installRuntime(root: vscode.Uri, pkgManager: string) {
+  const installCmd = pkgManager === 'yarn' ? 'add' : 'install';
+  const fullCmd = `${pkgManager} ${installCmd} --save-dev @ui-checker/runtime`;
+  
+  return new Promise<void>((resolve, reject) => {
+    const shell = process.platform === 'win32' ? 'cmd.exe' : '/bin/bash';
+    const proc = spawn(pkgManager, [installCmd, '--save-dev', '@ui-checker/runtime'], {
+      cwd: root.fsPath,
+      shell: true
+    });
+
+    proc.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`Command failed with code ${code}: ${fullCmd}`));
+    });
+
+    proc.on('error', (err) => {
+      reject(err);
+    });
+  });
+}
+
+async function injectImport(root: vscode.Uri) {
+  const entryPoints = [
+    'src/main.tsx',
+    'src/index.tsx',
+    'src/App.tsx',
+    'src/main.ts',
+    'src/index.ts',
+    'main.tsx',
+    'index.tsx',
+    'App.tsx',
+    'main.ts',
+    'index.ts'
+  ];
+
+  let targetFile: vscode.Uri | null = null;
+  for (const ep of entryPoints) {
+    const uri = vscode.Uri.joinPath(root, ep);
+    if (fs.existsSync(uri.fsPath)) {
+      targetFile = uri;
+      break;
+    }
+  }
+
+  if (!targetFile) {
+    // Try a broader search if common ones fail
+    const found = await vscode.workspace.findFiles('src/{main,index,App}.{ts,tsx,js,jsx}', '**/node_modules/**', 1);
+    if (found.length > 0) {
+      targetFile = found[0];
+    }
+  }
+
+  if (!targetFile) {
+    throw new Error('Could not find project entry point. Please add "import \'@ui-checker/runtime\';" manually to your main file.');
+  }
+
+  const document = await vscode.workspace.openTextDocument(targetFile);
+  const text = document.getText();
+  const importStatement = "import '@ui-checker/runtime';\n";
+
+  if (text.includes("@ui-checker/runtime")) {
+    return; // Already imported
+  }
+
+  const edit = new vscode.WorkspaceEdit();
+  // Insert at the top, but after shebang if present
+  let insertLine = 0;
+  if (text.startsWith('#!')) {
+    const firstNewline = text.indexOf('\n');
+    if (firstNewline !== -1) {
+      insertLine = 1;
+    }
+  }
+
+  edit.insert(targetFile, new vscode.Position(insertLine, 0), importStatement);
+  await vscode.workspace.applyEdit(edit);
+  await document.save();
 }
 
 export function deactivate() {

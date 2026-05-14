@@ -1,0 +1,26 @@
+{
+  "id": "design-tokens",
+  "title": "Design Tokens",
+  "description": "UI Checker can validate expected Figma values against imported design tokens.",
+  "source": "@site/docs/design-tokens.md",
+  "sourceDirName": ".",
+  "slug": "/design-tokens",
+  "permalink": "/design-tokens",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "id": "design-tokens",
+    "title": "Design Tokens"
+  },
+  "sidebar": "mainSidebar",
+  "previous": {
+    "title": "Visual Overlay",
+    "permalink": "/workflows/visual-overlay"
+  },
+  "next": {
+    "title": "VS Code Bridge",
+    "permalink": "/vscode-bridge"
+  }
+}

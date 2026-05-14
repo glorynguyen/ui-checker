@@ -933,6 +933,14 @@ body {
   color: var(--text);
 }
 
+.config-meta.status-error {
+  color: var(--red);
+}
+
+.config-meta.status-success {
+  color: var(--green);
+}
+
 .mapping-stack {
   display: flex;
   flex-direction: column;
@@ -1120,6 +1128,39 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.token-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.08);
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.token-chip--ok {
+  color: var(--green);
+  background: var(--green-soft);
+  border-color: rgba(60, 207, 145, 0.2);
+}
+
+.token-chip--warning {
+  color: var(--yellow);
+  background: rgba(255, 202, 98, 0.12);
+  border-color: rgba(255, 202, 98, 0.2);
+}
+
+.token-chip--suggestion {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: rgba(55, 179, 255, 0.2);
 }
 
 /* --- Badges & Chips --- */
@@ -1461,6 +1502,7 @@ body {
 .stat-matched   { color: var(--green); }
 .stat-mismatched { color: var(--red); }
 .stat-missing   { color: var(--orange); }
+.stat-tokenized  { color: var(--accent); }
 
 .results-summary .stat {
   padding: 8px 16px;

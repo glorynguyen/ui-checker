@@ -1,0 +1,26 @@
+{
+  "id": "workflows/compare-elements",
+  "title": "Compare Elements",
+  "description": "The primary UI Checker workflow runs inside Chrome DevTools.",
+  "source": "@site/docs/workflows/compare-elements.md",
+  "sourceDirName": "workflows",
+  "slug": "/workflows/compare-elements",
+  "permalink": "/workflows/compare-elements",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "id": "compare-elements",
+    "title": "Compare Elements"
+  },
+  "sidebar": "mainSidebar",
+  "previous": {
+    "title": "Figma Integration",
+    "permalink": "/figma-integration"
+  },
+  "next": {
+    "title": "Visual Overlay",
+    "permalink": "/workflows/visual-overlay"
+  }
+}

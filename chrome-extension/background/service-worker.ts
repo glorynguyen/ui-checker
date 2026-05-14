@@ -1,11 +1,31 @@
 // --- Figma CSS Diff Service Worker ---
 import { FigmaAPIClient } from '../lib/figma-api-client';
+import { selectBestFigmaTab } from '../lib/figma-tab-sync';
 
 console.log('[SW] LOADING...');
 
 let figmaClient: FigmaAPIClient | null = null;
 
 const panelPorts = new Map<number, chrome.runtime.Port>(); // tabId -> port
+const FIGMA_NODE_CACHE_KEY = 'figmaNodeCache';
+const FIGMA_IMAGE_CACHE_KEY = 'figmaImageCache';
+const FIGMA_CACHE_MAX_ENTRIES = 50;
+const FIGMA_TAB_URL_PATTERNS = [
+  'https://www.figma.com/file/*',
+  'https://www.figma.com/design/*',
+  'https://figma.com/file/*',
+  'https://figma.com/design/*'
+];
+
+interface CacheEntry<T> {
+  value: T;
+  cachedAt: number;
+}
+
+interface CacheMeta {
+  source: 'cache' | 'network';
+  cachedAt: number;
+}
 
 // --- VS Code Bridge (WebSocket) ---
 let bridgeSocket: WebSocket | null = null;
@@ -87,7 +107,14 @@ chrome.runtime.onConnect.addListener((port) => {
     if (msg.action === 'MCP_GET_NODE') {
       getNodeData(msg.fileKey, msg.nodeId, Boolean(msg.forceRefresh))
         .then(({ data, meta }) => port.postMessage({ action: 'MCP_NODE_DATA', data, meta, requestId: msg.requestId }))
-        .catch(err => port.postMessage({ action: 'MCP_NODE_FETCH_FAILED', error: err.message }));
+        .catch(err => port.postMessage({ action: 'MCP_NODE_FETCH_FAILED', error: err.message, requestId: msg.requestId }));
+      return;
+    }
+
+    if (msg.action === 'MCP_GET_IMAGE') {
+      getImageData(msg.fileKey, msg.nodeId, Boolean(msg.forceRefresh))
+        .then(({ imageUrl, meta }) => port.postMessage({ action: 'MCP_IMAGE_DATA', imageUrl, meta, requestId: msg.requestId }))
+        .catch(err => port.postMessage({ action: 'MCP_IMAGE_FETCH_FAILED', error: err.message, requestId: msg.requestId }));
       return;
     }
 
@@ -126,6 +153,11 @@ chrome.runtime.onConnect.addListener((port) => {
         return;
     }
 
+    if (msg.action === 'SYNC_FIGMA_TAB') {
+      syncFigmaTab(port);
+      return;
+    }
+
     // Forward to content script if not handled
     if (tabId !== null) {
       chrome.tabs.sendMessage(tabId, msg).catch(() => {});
@@ -150,8 +182,37 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
 async function getNodeData(fileKey: string, nodeId: string, forceRefresh: boolean = false) {
   const client = await ensureClient();
   if (!client) throw new Error('No token found');
+
+  const cacheKey = makeFigmaCacheKey(fileKey, nodeId);
+  if (!forceRefresh) {
+    const cached = await readFigmaCacheEntry<any>(FIGMA_NODE_CACHE_KEY, cacheKey);
+    if (cached) {
+      return { data: cached.value, meta: makeCacheMeta('cache', cached.cachedAt) };
+    }
+  }
+
   const nodeData = await client.getNode(nodeId, fileKey);
-  return { data: nodeData, meta: { source: 'network', cachedAt: Date.now() } };
+  const cachedAt = Date.now();
+  await writeFigmaCacheEntry(FIGMA_NODE_CACHE_KEY, cacheKey, { value: nodeData, cachedAt });
+  return { data: nodeData, meta: makeCacheMeta('network', cachedAt) };
+}
+
+async function getImageData(fileKey: string, nodeId: string, forceRefresh: boolean = false) {
+  const client = await ensureClient();
+  if (!client) throw new Error('No token found');
+
+  const cacheKey = makeFigmaCacheKey(fileKey, nodeId);
+  if (!forceRefresh) {
+    const cached = await readFigmaCacheEntry<string>(FIGMA_IMAGE_CACHE_KEY, cacheKey);
+    if (cached) {
+      return { imageUrl: cached.value, meta: makeCacheMeta('cache', cached.cachedAt) };
+    }
+  }
+
+  const imageData = await client.getImage(nodeId, fileKey);
+  const cachedAt = Date.now();
+  await writeFigmaCacheEntry(FIGMA_IMAGE_CACHE_KEY, cacheKey, { value: imageData.imageUrl, cachedAt });
+  return { imageUrl: imageData.imageUrl, meta: makeCacheMeta('network', cachedAt) };
 }
 
 async function ensureClient() {
@@ -162,4 +223,70 @@ async function ensureClient() {
     return figmaClient;
   }
   return null;
+}
+
+async function syncFigmaTab(port: chrome.runtime.Port) {
+  try {
+    const activeTabs = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+      url: FIGMA_TAB_URL_PATTERNS
+    });
+    const synced = selectBestFigmaTab(activeTabs)
+      || selectBestFigmaTab(await chrome.tabs.query({ url: FIGMA_TAB_URL_PATTERNS }));
+
+    if (!synced) {
+      port.postMessage({
+        action: 'FIGMA_TAB_SYNC_FAILED',
+        error: 'No open Figma tab with a selected node was found.'
+      });
+      return;
+    }
+
+    port.postMessage({
+      action: 'FIGMA_TAB_SYNCED',
+      url: synced.url,
+      fileKey: synced.fileKey,
+      nodeId: synced.nodeId
+    });
+  } catch (err: any) {
+    port.postMessage({
+      action: 'FIGMA_TAB_SYNC_FAILED',
+      error: err?.message || 'Unable to inspect open Figma tabs.'
+    });
+  }
+}
+
+function makeFigmaCacheKey(fileKey: string, nodeId: string) {
+  return `${fileKey}::${nodeId}`;
+}
+
+function makeCacheMeta(source: CacheMeta['source'], cachedAt: number): CacheMeta {
+  return { source, cachedAt };
+}
+
+async function readFigmaCacheEntry<T>(storageKey: string, cacheKey: string): Promise<CacheEntry<T> | null> {
+  const result = await chrome.storage.local.get([storageKey]);
+  const cache = result[storageKey] || {};
+  const entry = cache[cacheKey] as CacheEntry<T> | undefined;
+  return entry && typeof entry.cachedAt === 'number' ? entry : null;
+}
+
+async function writeFigmaCacheEntry<T>(storageKey: string, cacheKey: string, entry: CacheEntry<T>) {
+  const result = await chrome.storage.local.get([storageKey]);
+  const cache = { ...(result[storageKey] || {}), [cacheKey]: entry };
+  pruneCache(cache);
+  await chrome.storage.local.set({ [storageKey]: cache });
+}
+
+function pruneCache(cache: Record<string, CacheEntry<unknown>>) {
+  const entries = Object.entries(cache);
+  if (entries.length <= FIGMA_CACHE_MAX_ENTRIES) return;
+
+  entries
+    .sort(([, a], [, b]) => b.cachedAt - a.cachedAt)
+    .slice(FIGMA_CACHE_MAX_ENTRIES)
+    .forEach(([key]) => {
+      delete cache[key];
+    });
 }

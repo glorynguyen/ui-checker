@@ -11,5 +11,5 @@
     "types": ["chrome", "node", "vscode"],
     "isolatedModules": true
   },
-  "include": ["chrome-extension", "vscode-bridge", "test", "scripts", "test-support"]
+  "include": ["chrome-extension", "vscode-bridge", "cli", "test", "scripts", "test-support"]
 }

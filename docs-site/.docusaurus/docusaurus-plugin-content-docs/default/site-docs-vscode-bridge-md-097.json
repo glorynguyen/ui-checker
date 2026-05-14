@@ -1,0 +1,26 @@
+{
+  "id": "vscode-bridge",
+  "title": "VS Code Bridge",
+  "description": "The VS Code bridge helps connect DevTools mismatches to source code.",
+  "source": "@site/docs/vscode-bridge.md",
+  "sourceDirName": ".",
+  "slug": "/vscode-bridge",
+  "permalink": "/vscode-bridge",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "id": "vscode-bridge",
+    "title": "VS Code Bridge"
+  },
+  "sidebar": "mainSidebar",
+  "previous": {
+    "title": "Design Tokens",
+    "permalink": "/design-tokens"
+  },
+  "next": {
+    "title": "CI Runner",
+    "permalink": "/ci"
+  }
+}
