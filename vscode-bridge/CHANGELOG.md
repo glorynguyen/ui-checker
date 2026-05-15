@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/glorynguyen/ui-checker/compare/vscode-bridge-v1.0.0...vscode-bridge-v1.1.0) (2026-05-15)
+
+
+### Features
+
+* **bridge:** add runtime setup button to Chrome extension panel ([6298a97](https://github.com/glorynguyen/ui-checker/commit/6298a97f63d15706e2ad9a47150c05e1db695ff3))
+
 # 1.0.0 (2026-05-14)
 
 
