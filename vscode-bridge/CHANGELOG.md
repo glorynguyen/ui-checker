@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/glorynguyen/ui-checker/compare/vscode-bridge-v1.1.0...vscode-bridge-v1.2.0) (2026-05-15)
+
+
+### Features
+
+* **vscode-bridge:** replace package manager spawn with direct package.json edit ([4d0e5ed](https://github.com/glorynguyen/ui-checker/commit/4d0e5eda7264a51ee9bc0f9b1c399eb178a2a237))
+
 # [1.1.0](https://github.com/glorynguyen/ui-checker/compare/vscode-bridge-v1.0.0...vscode-bridge-v1.1.0) (2026-05-15)
 
 
