@@ -30,7 +30,7 @@ By default the bridge finds your source file by fuzzy-matching CSS selectors. Fo
 
 ### Setup from UI Checker
 
-In Chrome DevTools, open UI Checker's **Workspace Settings**, expand **VS Code Bridge**, and click **Setup Runtime**. VS Code asks for confirmation, then installs `@ui-checker/runtime` and imports it into the detected app entry file.
+In Chrome DevTools, open UI Checker's **Workspace Settings**, expand **VS Code Bridge**, and click **Setup Runtime**. VS Code asks for confirmation, then adds `@ui-checker/runtime` to the nearest `package.json` and imports it into the detected app entry file.
 
 ### Install
 

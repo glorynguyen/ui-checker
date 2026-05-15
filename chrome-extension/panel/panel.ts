@@ -62,7 +62,17 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
 
   const headerLocateBtn = document.getElementById('header-locate-btn') as HTMLButtonElement;
 
+  function logRuntimeSetup(event: string, details?: Record<string, unknown>) {
+    if (details) {
+      console.log(`[Panel][RuntimeSetup] ${event}`, details);
+    } else {
+      console.log(`[Panel][RuntimeSetup] ${event}`);
+    }
+  }
+
   function setRuntimeSetupState(state: 'idle' | 'loading' | 'success' | 'error', message: string) {
+    logRuntimeSetup('state changed', { state, message });
+
     if (runtimeSetupStatus) {
       runtimeSetupStatus.textContent = message;
       runtimeSetupStatus.classList.toggle('success', state === 'success');
@@ -78,8 +88,13 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
 
   runtimeSetupBtn?.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (runtimeSetupBtn.disabled) return;
+    logRuntimeSetup('button clicked');
+    if (runtimeSetupBtn.disabled) {
+      logRuntimeSetup('click ignored because setup is already running');
+      return;
+    }
     setRuntimeSetupState('loading', 'Waiting for VS Code confirmation...');
+    logRuntimeSetup('sending bridge command', { action: 'SETUP_RUNTIME' });
     sendMessage({
       action: 'BRIDGE_COMMAND',
       payload: { action: 'SETUP_RUNTIME' }
@@ -222,6 +237,7 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
           bridgeBadge.className = 'status-badge';
         }
       } else if (msg.action === 'BRIDGE_ERROR') {
+        logRuntimeSetup('bridge error', { error: msg.error || 'unknown' });
         const searchingButtons = document.querySelectorAll('.bridge-btn.loading, #header-locate-btn.loading');
         searchingButtons.forEach(btn => {
           btn.classList.remove('loading');
@@ -234,12 +250,16 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
         setRuntimeSetupState('error', 'VS Code Bridge not found. Start the bridge extension and try again.');
         setSelectionStatus('VS Code Bridge not found. Is the extension installed?', 'error');
       } else if (msg.action === 'SETUP_RUNTIME_STARTED') {
-        setRuntimeSetupState('loading', msg.message || 'Installing runtime in VS Code...');
+        logRuntimeSetup('VS Code started setup', { message: msg.message });
+        setRuntimeSetupState('loading', msg.message || 'Updating runtime files in VS Code...');
       } else if (msg.action === 'SETUP_RUNTIME_SUCCESS') {
+        logRuntimeSetup('VS Code completed setup', { message: msg.message });
         setRuntimeSetupState('success', msg.message || 'Runtime setup complete. Reload your app to stamp source locations.');
       } else if (msg.action === 'SETUP_RUNTIME_CANCELLED') {
+        logRuntimeSetup('VS Code cancelled setup', { message: msg.message });
         setRuntimeSetupState('idle', msg.message || 'Runtime setup cancelled in VS Code.');
       } else if (msg.action === 'SETUP_RUNTIME_FAILED') {
+        logRuntimeSetup('VS Code failed setup', { error: msg.error });
         setRuntimeSetupState('error', msg.error || 'Runtime setup failed in VS Code.');
       } else if (msg.action === 'SELECTOR_RESULTS') {
         console.log('[Panel] Bridge found matches:', msg.matches);

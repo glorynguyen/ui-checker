@@ -6,6 +6,8 @@ export interface MockElement {
     [Symbol.iterator](): IterableIterator<string>;
   };
   dataset: Record<string, string>;
+  parentElement: MockElement | null;
+  isConnected: boolean;
   style: any;
   removeCalled: boolean;
   getAttribute(name: string): string | null;
@@ -29,6 +31,8 @@ export function createMockElement({
   classNames = [] as string[],
   dataset = {} as Record<string, string>,
   attributes = {} as Record<string, string>,
+  parentElement = null as MockElement | null,
+  isConnected = true,
   rect = { left: 10, top: 20, width: 120, height: 48 },
   computedStyles = {} as Record<string, string>
 } = {}): MockElement {
@@ -44,6 +48,8 @@ export function createMockElement({
     id,
     classList,
     dataset,
+    parentElement,
+    isConnected,
     style: {},
     removeCalled: false,
     getAttribute(name: string) {
@@ -63,7 +69,12 @@ export function createMockElement({
   };
 }
 
-export function createContentScriptSandbox({ selectorMap = {} as Record<string, MockElement>, rootFontSize = '16px' } = {}) {
+export function createContentScriptSandbox({
+  selectorMap = {} as Record<string, MockElement>,
+  idMap = {} as Record<string, MockElement>,
+  throwSelectors = [] as string[],
+  rootFontSize = '16px'
+} = {}) {
   const listeners = new Map<string, any>();
   const messageListeners: any[] = [];
   const sentMessages: any[] = [];
@@ -88,7 +99,13 @@ export function createContentScriptSandbox({ selectorMap = {} as Record<string, 
       listeners.delete(type);
     },
     querySelector(selector: string) {
+      if (throwSelectors.includes(selector)) {
+        throw new Error(`Invalid selector: ${selector}`);
+      }
       return selectorMap[selector] ?? null;
+    },
+    getElementById(id: string) {
+      return idMap[id] ?? null;
     }
   };
 

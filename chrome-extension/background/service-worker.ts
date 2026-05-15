@@ -17,6 +17,14 @@ const FIGMA_TAB_URL_PATTERNS = [
   'https://figma.com/design/*'
 ];
 
+function logRuntimeSetup(event: string, details?: Record<string, unknown>) {
+  if (details) {
+    console.log(`[SW][RuntimeSetup] ${event}`, details);
+  } else {
+    console.log(`[SW][RuntimeSetup] ${event}`);
+  }
+}
+
 interface CacheEntry<T> {
   value: T;
   cachedAt: number;
@@ -72,6 +80,35 @@ function notifyPanelPorts(msg: any) {
 
 connectToBridge();
 
+async function attachNearestSourceLoc(payload: any, tabId: number | null) {
+  if (payload?.action !== 'FIND_SELECTOR' || tabId === null) {
+    return payload;
+  }
+
+  if (payload.sourceLoc) {
+    return payload;
+  }
+
+  try {
+    const nearest = await chrome.tabs.sendMessage(tabId, {
+      action: 'QUERY_NEAREST_SOURCE_LOC',
+      selector: payload.selector
+    });
+
+    if (nearest?.sourceLoc) {
+      return {
+        ...payload,
+        sourceLoc: nearest.sourceLoc,
+        sourceName: nearest.sourceName ?? payload.sourceName ?? null
+      };
+    }
+  } catch (e) {
+    console.warn('[SW] Could not query nearest data-uic-loc before locate:', e);
+  }
+
+  return payload;
+}
+
 // --- Main Message Router ---
 chrome.runtime.onConnect.addListener((port) => {
   let tabId: number | null = null;
@@ -79,19 +116,37 @@ chrome.runtime.onConnect.addListener((port) => {
   port.onMessage.addListener(async (msg: any) => {
     // 1. Bridge Commands (Priority 1)
     if (msg.action === 'BRIDGE_COMMAND') {
-      console.log('[SW] BRIDGE_COMMAND RECEIVED:', msg.payload);
+      const payload = await attachNearestSourceLoc(msg.payload, tabId);
+      console.log('[SW] BRIDGE_COMMAND RECEIVED:', payload);
+      if (payload?.action === 'SETUP_RUNTIME') {
+        logRuntimeSetup('command received from panel', {
+          bridgeReadyState: bridgeSocket?.readyState ?? 'none'
+        });
+      }
       if (!bridgeSocket || bridgeSocket.readyState !== WebSocket.OPEN) {
         console.log('[SW] Socket not open, attempting reconnect before send...');
+        if (payload?.action === 'SETUP_RUNTIME') {
+          logRuntimeSetup('bridge socket not open; reconnecting before forwarding');
+        }
         await connectToBridge();
         setTimeout(() => {
           if (bridgeSocket && bridgeSocket.readyState === WebSocket.OPEN) {
-            bridgeSocket.send(JSON.stringify(msg.payload));
+            if (payload?.action === 'SETUP_RUNTIME') {
+              logRuntimeSetup('forwarding setup command after reconnect');
+            }
+            bridgeSocket.send(JSON.stringify(payload));
           } else {
+            if (payload?.action === 'SETUP_RUNTIME') {
+              logRuntimeSetup('failed to connect to bridge for setup command');
+            }
             port.postMessage({ action: 'BRIDGE_ERROR', error: 'Could not connect to VS Code' });
           }
         }, 800);
       } else {
-        bridgeSocket.send(JSON.stringify(msg.payload));
+        if (payload?.action === 'SETUP_RUNTIME') {
+          logRuntimeSetup('forwarding setup command to VS Code bridge');
+        }
+        bridgeSocket.send(JSON.stringify(payload));
       }
       return;
     }

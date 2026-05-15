@@ -1,10 +1,24 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { spawn } from 'node:child_process';
 import { WebSocketServer, WebSocket } from 'ws';
 import { SearchLogic, SearchMatch } from './search-logic';
 import { enumerateSearchableFiles, type FileEnumeratorDeps } from './file-enumerator';
+import {
+  findSourceLocSuffixMatch,
+  parseSourceLoc,
+  sourceLocBasename,
+  sourceLocMatch,
+} from './source-loc';
+import {
+  RUNTIME_FALLBACK_EXCLUDE,
+  RUNTIME_FALLBACK_INCLUDE,
+  RUNTIME_PACKAGE_NAME,
+  addRuntimeToPackageJson,
+  findKnownRuntimeEntryFile,
+  findNearestPackageJson,
+  getRuntimeImportInsertLine,
+} from './runtime-setup';
 
 const vscodeDeps: FileEnumeratorDeps = {
   getConfiguration: (s) => vscode.workspace.getConfiguration(s),
@@ -14,8 +28,6 @@ const vscodeDeps: FileEnumeratorDeps = {
 
 let server: WebSocketServer | null = null;
 let statusBarItem: vscode.StatusBarItem;
-
-type PackageManager = 'npm' | 'yarn' | 'pnpm';
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('UI Checker Bridge is now active');
@@ -154,7 +166,7 @@ function startBridgeServer() {
 
             ws.send(JSON.stringify({
               action: 'SETUP_RUNTIME_STARTED',
-              message: 'Installing @ui-checker/runtime and updating the entry file...'
+              message: 'Updating package.json and the app entry file...'
             }));
 
             const result = await setupRuntime();
@@ -174,7 +186,7 @@ function startBridgeServer() {
 
           if (data.action === 'FIND_SELECTOR') {
             // Fast path: runtime-stamped data-uic-loc gives us file:line:col directly.
-            const exact = data.sourceLoc ? resolveExactSourceLoc(data.sourceLoc) : null;
+            const exact = data.sourceLoc ? await resolveExactSourceLoc(data.sourceLoc) : null;
 
             const matches = exact
               ? [exact]
@@ -245,36 +257,43 @@ function tokenizeSelector(selector: string): string[] {
   return selector.split(/(?=[.#])| /).map(t => t.trim()).filter(Boolean);
 }
 
-// Resolve `data-uic-loc="path:line:col"` against each workspace folder. Returns
-// a single high-confidence match if the file exists; null otherwise so callers
-// fall back to fuzzy search.
-function resolveExactSourceLoc(sourceLoc: string): SearchMatch | null {
-  // Format: "<rel-or-abs-path>:<line>:<col>". Path may itself contain colons
-  // on Windows; line/col are always the trailing two numeric segments.
-  const m = sourceLoc.match(/^(.*):(\d+):(\d+)$/);
-  if (!m) return null;
-  const [, rawPath, lineStr] = m;
-  const line = parseInt(lineStr, 10);
-  if (!Number.isFinite(line)) return null;
+// Resolve `data-uic-loc="path:line:col"` against the workspace. The runtime
+// path can be package-relative in monorepos, so direct root joins are tried
+// first and then a workspace suffix search keeps the data-uic-loc fast path.
+async function resolveExactSourceLoc(sourceLoc: string): Promise<SearchMatch | null> {
+  const loc = parseSourceLoc(sourceLoc);
+  if (!loc) return null;
 
   const candidates: string[] = [];
-  if (path.isAbsolute(rawPath)) {
-    candidates.push(rawPath);
+  if (path.isAbsolute(loc.rawPath)) {
+    candidates.push(loc.rawPath);
   } else {
     for (const folder of vscode.workspace.workspaceFolders ?? []) {
-      candidates.push(path.join(folder.uri.fsPath, rawPath));
+      candidates.push(path.join(folder.uri.fsPath, loc.rawPath));
     }
   }
 
   for (const candidate of candidates) {
     try {
       if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
-        return { file: candidate, line: Math.max(0, line - 1), score: 9999 };
+        return sourceLocMatch(candidate, loc);
       }
     } catch {
       // ignore and try next candidate
     }
   }
+
+  if (!path.isAbsolute(loc.rawPath)) {
+    const basename = sourceLocBasename(loc.rawPath);
+    if (basename) {
+      const found = await vscode.workspace.findFiles(`**/${basename}`, '**/{node_modules,dist,build,.next,out,coverage}/**', 50);
+      const suffixMatch = findSourceLocSuffixMatch(loc.rawPath, found.map((uri) => uri.fsPath));
+      if (suffixMatch) {
+        return sourceLocMatch(suffixMatch, loc);
+      }
+    }
+  }
+
   return null;
 }
 
@@ -304,7 +323,7 @@ async function openMatch(match: SearchMatch) {
   const doc = await vscode.workspace.openTextDocument(match.file);
   const editor = await vscode.window.showTextDocument(doc);
   
-  const pos = new vscode.Position(match.line, 0);
+  const pos = new vscode.Position(match.line, match.column ?? 0);
   editor.selection = new vscode.Selection(pos, pos);
   editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
 }
@@ -325,17 +344,18 @@ async function setupRuntime() {
       title: "Setting up UI Checker Runtime",
       cancellable: false
     }, async (progress) => {
-      progress.report({ message: "Detecting package manager..." });
-      const pkgManager = await detectPackageManager(root);
-      
-      progress.report({ message: `Installing @ui-checker/runtime using ${pkgManager}...` });
-      await installRuntime(root, pkgManager);
+      progress.report({ message: "Finding app entry point..." });
+      const entryFile = await findRuntimeEntryFile(root);
+
+      progress.report({ message: `Adding ${RUNTIME_PACKAGE_NAME} to package.json...` });
+      const packageJson = vscode.Uri.file(findNearestPackageJson(root.fsPath, entryFile.fsPath));
+      addRuntimeToPackageJson(packageJson.fsPath);
 
       progress.report({ message: "Injecting import into entry point..." });
-      await injectImport(root);
+      await injectImport(entryFile);
     });
 
-    vscode.window.showInformationMessage('[UI Checker] Runtime setup complete! @ui-checker/runtime installed and imported.');
+    vscode.window.showInformationMessage('[UI Checker] Runtime setup complete. package.json was updated and the runtime import was added.');
     return { ok: true };
   } catch (error: any) {
     const message = error?.message || 'Unknown setup error.';
@@ -346,108 +366,46 @@ async function setupRuntime() {
 
 async function confirmRuntimeSetup() {
   const choice = await vscode.window.showWarningMessage(
-    '[UI Checker] Install @ui-checker/runtime and add an import to your project entry file?',
+    '[UI Checker] Add @ui-checker/runtime to package.json and import it in your project entry file?',
     {
       modal: true,
-      detail: 'This runs your package manager in the active VS Code workspace and edits the detected app entry file.'
+      detail: 'This edits package.json in the active VS Code workspace and updates the detected app entry file.'
     },
-    'Install & Import'
+    'Update Files'
   );
 
-  return choice === 'Install & Import';
+  return choice === 'Update Files';
 }
 
-async function detectPackageManager(root: vscode.Uri): Promise<PackageManager> {
-  const hasPnpm = fs.existsSync(path.join(root.fsPath, 'pnpm-lock.yaml'));
-  if (hasPnpm) return 'pnpm';
-  const hasYarn = fs.existsSync(path.join(root.fsPath, 'yarn.lock'));
-  if (hasYarn) return 'yarn';
-  return 'npm';
+async function findRuntimeEntryFile(root: vscode.Uri) {
+  const knownEntryFile = findKnownRuntimeEntryFile(root.fsPath);
+  if (knownEntryFile) {
+    return vscode.Uri.file(knownEntryFile);
+  }
+
+  const found = await vscode.workspace.findFiles(
+    new vscode.RelativePattern(root, RUNTIME_FALLBACK_INCLUDE),
+    RUNTIME_FALLBACK_EXCLUDE,
+    1
+  );
+  if (found.length > 0) {
+    return found[0];
+  }
+
+  throw new Error(`Could not find project entry point. Please add "import '${RUNTIME_PACKAGE_NAME}';" manually to your main file.`);
 }
 
-async function installRuntime(root: vscode.Uri, pkgManager: PackageManager) {
-  const args = getInstallArgs(pkgManager);
-  const fullCmd = `${pkgManager} ${args.join(' ')}`;
-  
-  return new Promise<void>((resolve, reject) => {
-    const proc = spawn(pkgManager, args, {
-      cwd: root.fsPath,
-      shell: true
-    });
-
-    proc.on('close', (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`Command failed with code ${code}: ${fullCmd}`));
-    });
-
-    proc.on('error', (err) => {
-      reject(err);
-    });
-  });
-}
-
-function getInstallArgs(pkgManager: PackageManager) {
-  if (pkgManager === 'yarn') {
-    return ['add', '--dev', '@ui-checker/runtime'];
-  }
-  if (pkgManager === 'pnpm') {
-    return ['add', '--save-dev', '@ui-checker/runtime'];
-  }
-  return ['install', '--save-dev', '@ui-checker/runtime'];
-}
-
-async function injectImport(root: vscode.Uri) {
-  const entryPoints = [
-    'src/main.tsx',
-    'src/index.tsx',
-    'src/App.tsx',
-    'src/main.ts',
-    'src/index.ts',
-    'main.tsx',
-    'index.tsx',
-    'App.tsx',
-    'main.ts',
-    'index.ts'
-  ];
-
-  let targetFile: vscode.Uri | null = null;
-  for (const ep of entryPoints) {
-    const uri = vscode.Uri.joinPath(root, ep);
-    if (fs.existsSync(uri.fsPath)) {
-      targetFile = uri;
-      break;
-    }
-  }
-
-  if (!targetFile) {
-    // Try a broader search if common ones fail
-    const found = await vscode.workspace.findFiles('src/{main,index,App}.{ts,tsx,js,jsx}', '**/node_modules/**', 1);
-    if (found.length > 0) {
-      targetFile = found[0];
-    }
-  }
-
-  if (!targetFile) {
-    throw new Error('Could not find project entry point. Please add "import \'@ui-checker/runtime\';" manually to your main file.');
-  }
-
+async function injectImport(targetFile: vscode.Uri) {
   const document = await vscode.workspace.openTextDocument(targetFile);
   const text = document.getText();
-  const importStatement = "import '@ui-checker/runtime';\n";
+  const importStatement = `import '${RUNTIME_PACKAGE_NAME}';\n`;
 
-  if (text.includes("@ui-checker/runtime")) {
+  if (text.includes(RUNTIME_PACKAGE_NAME)) {
     return; // Already imported
   }
 
   const edit = new vscode.WorkspaceEdit();
-  // Insert at the top, but after shebang if present
-  let insertLine = 0;
-  if (text.startsWith('#!')) {
-    const firstNewline = text.indexOf('\n');
-    if (firstNewline !== -1) {
-      insertLine = 1;
-    }
-  }
+  const insertLine = getRuntimeImportInsertLine(text);
 
   edit.insert(targetFile, new vscode.Position(insertLine, 0), importStatement);
   await vscode.workspace.applyEdit(edit);

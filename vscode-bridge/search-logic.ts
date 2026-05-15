@@ -6,6 +6,7 @@ export interface SearchMatch {
   file: string;
   score: number;
   line: number;
+  column?: number;
 }
 
 export const SearchLogic = {

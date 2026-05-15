@@ -48,6 +48,91 @@ test('content script extracts selected element styles and root font size via QUE
   assert.equal(message.data.styles['font-size'], '1rem');
 });
 
+test('content script resolves nearest data-uic-loc from ancestors before locate', () => {
+  const card = createMockElement({
+    tagName: 'SECTION',
+    classNames: ['card'],
+    attributes: {
+      'data-uic-loc': 'src/components/Card.tsx:42:7',
+      'data-uic-name': 'Card'
+    }
+  });
+  const label = createMockElement({
+    tagName: 'SPAN',
+    classNames: ['label'],
+    parentElement: card
+  });
+
+  const harness = loadContentScriptHarness({
+    selectorMap: {
+      '.label': label
+    }
+  });
+
+  harness.listener({ action: 'QUERY_SELECTOR', selector: '.label' }, null, () => {});
+
+  const selectionMessage = harness.sentMessages[0];
+  assert.equal(selectionMessage.action, 'ELEMENT_SELECTED');
+  assert.equal(selectionMessage.data.sourceLoc, 'src/components/Card.tsx:42:7');
+  assert.equal(selectionMessage.data.sourceName, 'Card');
+
+  let response: any = null;
+  const keepAlive = harness.listener(
+    { action: 'QUERY_NEAREST_SOURCE_LOC', selector: '.label' },
+    null,
+    (payload: any) => {
+      response = payload;
+    }
+  );
+
+  assert.equal(keepAlive, true);
+  assert.equal(response.sourceLoc, 'src/components/Card.tsx:42:7');
+  assert.equal(response.sourceName, 'Card');
+});
+
+test('content script falls back to selector id when utility classes make querySelector invalid', () => {
+  const footer = createMockElement({
+    tagName: 'FOOTER',
+    attributes: {
+      'data-uic-loc': 'Footer.tsx:10:1',
+      'data-uic-name': 'Footer'
+    }
+  });
+  const button = createMockElement({
+    tagName: 'BUTTON',
+    id: 'subnav-button-1',
+    attributes: {
+      'data-uic-loc': 'non-sitecore/SubNavigation/SubnavigationDesktop.tsx:240:17',
+      'data-uic-name': 'SubnavigationDesktop'
+    }
+  });
+  const selector = 'button#subnav-button-1.typo-btn-small.before:!rounded-full.hover:text-blue-500';
+
+  const harness = loadContentScriptHarness({
+    selectorMap: {
+      footer
+    },
+    idMap: {
+      'subnav-button-1': button
+    },
+    throwSelectors: [selector]
+  });
+
+  harness.listener({ action: 'QUERY_SELECTOR', selector: 'footer' }, null, () => {});
+
+  let response: any = null;
+  harness.listener(
+    { action: 'QUERY_NEAREST_SOURCE_LOC', selector },
+    null,
+    (payload: any) => {
+      response = payload;
+    }
+  );
+
+  assert.equal(response.sourceLoc, 'non-sitecore/SubNavigation/SubnavigationDesktop.tsx:240:17');
+  assert.equal(response.sourceName, 'SubnavigationDesktop');
+});
+
 test('content script reports selector misses and returns rect data for selected elements', () => {
   const card = createMockElement({
     tagName: 'DIV',

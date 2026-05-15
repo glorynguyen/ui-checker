@@ -90,22 +90,47 @@
     return out;
   }
 
-  // Walk up the DOM (capped) to find the nearest element with a ui-checker
+  // Walk up the DOM to find the nearest element with a ui-checker
   // source-location attribute. The clicked target is often a leaf primitive
   // that React's dev runtime did not stamp directly; the wrapping component's
   // host node typically carries the attribute.
-  function findNearestSourceLoc(el: HTMLElement, maxHops = 8): { sourceLoc: string | null; sourceName: string | null } {
+  function findNearestSourceLoc(el: HTMLElement | null): { sourceLoc: string | null; sourceName: string | null } {
     let cur: HTMLElement | null = el;
-    let hops = 0;
-    while (cur && hops < maxHops) {
+    while (cur) {
       const loc = cur.getAttribute('data-uic-loc');
       if (loc) {
         return { sourceLoc: loc, sourceName: cur.getAttribute('data-uic-name') };
       }
       cur = cur.parentElement;
-      hops++;
     }
     return { sourceLoc: null, sourceName: null };
+  }
+
+  function queryElement(selector?: string): HTMLElement | null {
+    if (!selector) return null;
+
+    try {
+      const queried = document.querySelector(selector) as HTMLElement | null;
+      if (queried) return queried;
+    } catch {
+      // Utility classes with characters like ":" and "!" can make a raw
+      // descriptor invalid as a CSS selector. Fall through to the id hint.
+    }
+
+    const idMatch = selector.match(/#([^.#\s:[>+~]+)/);
+    if (idMatch) {
+      return document.getElementById(idMatch[1]);
+    }
+
+    return null;
+  }
+
+  function getCurrentElement(selector?: string): HTMLElement | null {
+    const queried = queryElement(selector);
+    if (queried) return queried;
+    if (selectedElement && selectedElement.isConnected !== false) return selectedElement;
+    if (lastTarget && lastTarget.isConnected !== false) return lastTarget;
+    return null;
   }
 
   function extractStyles(el: HTMLElement) {
@@ -234,12 +259,9 @@
     } else if (msg.action === 'GET_ELEMENT_RECT') {
       // Return the bounding rect via sendResponse
       console.log('[Content] GET_ELEMENT_RECT, selector:', msg.selector, 'selectedElement:', !!selectedElement, 'lastTarget:', !!lastTarget);
-      let target: HTMLElement | null = selectedElement || lastTarget;
-      if (msg.selector) {
-        const queried = document.querySelector(msg.selector) as HTMLElement | null;
-        console.log('[Content] querySelector result:', !!queried, 'for selector:', msg.selector);
-        target = queried || target;
-      }
+      const queried = queryElement(msg.selector);
+      console.log('[Content] query result:', !!queried, 'for selector:', msg.selector);
+      let target: HTMLElement | null = queried || selectedElement || lastTarget;
       if (target) {
         const rect = target.getBoundingClientRect();
         console.log('[Content] Sending rect:', { viewportX: Math.round(rect.left), viewportY: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) }, 'dpr:', window.devicePixelRatio);
@@ -259,6 +281,10 @@
         sendResponse({ error: true });
       }
       return true; // Keep message channel open for sendResponse
+    } else if (msg.action === 'QUERY_NEAREST_SOURCE_LOC') {
+      const target = getCurrentElement(msg.selector);
+      sendResponse(findNearestSourceLoc(target));
+      return true;
     }
   });
 })();
