@@ -28,6 +28,10 @@ Connect your browser-based UI inspection tools directly to your VS Code workspac
 
 By default the bridge finds your source file by fuzzy-matching CSS selectors. For an **exact jump** to the right file and line every time, add the optional runtime to your React project — it stamps every DOM node with its source location at render time.
 
+### Setup from UI Checker
+
+In Chrome DevTools, open UI Checker's **Workspace Settings**, expand **VS Code Bridge**, and click **Setup Runtime**. VS Code asks for confirmation, then installs `@ui-checker/runtime` and imports it into the detected app entry file.
+
 ### Install
 
 ```bash

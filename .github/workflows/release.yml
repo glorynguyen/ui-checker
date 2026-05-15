@@ -1,4 +1,4 @@
-name: Release
+name: Release Chrome Extension
 on:
   workflow_run:
     workflows: [CI]
@@ -25,23 +25,47 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Pin to tested commit
+        run: |
+          git fetch origin main --tags
+          git reset --hard ${{ github.event.workflow_run.head_sha }}
+
+      - name: Check Chrome release changes
+        id: chrome_changes
+        run: |
+          last_tag="$(git describe --tags --match 'v[0-9]*' --exclude 'vscode-bridge-*' --abbrev=0 2>/dev/null || true)"
+
+          if [ -z "$last_tag" ]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed_files="$(git diff --name-only "$last_tag..HEAD")"
+          printf '%s\n' "$changed_files"
+
+          if printf '%s\n' "$changed_files" | grep -Eq '^(chrome-extension/|package(-lock)?\.json$|\.releaserc\.json$|\.github/workflows/(ci|release)\.yml$)'; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No Chrome extension release changes found since $last_tag."
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up Node.js
+        if: steps.chrome_changes.outputs.has_changes == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '24.15.0'
 
       - name: Install dependencies
+        if: steps.chrome_changes.outputs.has_changes == 'true'
         run: npm ci
 
       - name: Build extension
+        if: steps.chrome_changes.outputs.has_changes == 'true'
         run: npm run build:extension
 
-      - name: Sync release branch
-        run: |
-          git fetch origin main --tags
-          git reset --hard origin/main
-
       - name: Run semantic-release
+        if: steps.chrome_changes.outputs.has_changes == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GOOGLE_CLIENT_ID: ${{ secrets.CLIENT_ID }}

@@ -1,0 +1,11 @@
+coverage/**
+.c8_output/**
+.nyc_output/**
+*.vsix
+debug-regex.ts
+test-*.ts
+*.ts
+!dist/**
+node_modules/**
+.releaserc.json
+.gitignore

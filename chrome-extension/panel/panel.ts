@@ -46,6 +46,8 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
   const tokenImportInput = document.getElementById('token-import-input') as HTMLInputElement;
   const tokenClearBtn = document.getElementById('token-clear-btn') as HTMLButtonElement;
   const tokenStatus = document.getElementById('token-status') as HTMLElement;
+  const runtimeSetupBtn = document.getElementById('runtime-setup-btn') as HTMLButtonElement;
+  const runtimeSetupStatus = document.getElementById('runtime-setup-status') as HTMLElement;
 
   // --- State ---
   let extractedData: any = null; // { element, dimensions, styles }
@@ -59,6 +61,30 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
   let designTokens: DesignToken[] = [];
 
   const headerLocateBtn = document.getElementById('header-locate-btn') as HTMLButtonElement;
+
+  function setRuntimeSetupState(state: 'idle' | 'loading' | 'success' | 'error', message: string) {
+    if (runtimeSetupStatus) {
+      runtimeSetupStatus.textContent = message;
+      runtimeSetupStatus.classList.toggle('success', state === 'success');
+      runtimeSetupStatus.classList.toggle('error', state === 'error');
+    }
+
+    if (runtimeSetupBtn) {
+      runtimeSetupBtn.disabled = state === 'loading';
+      runtimeSetupBtn.classList.toggle('loading', state === 'loading');
+      runtimeSetupBtn.textContent = state === 'loading' ? 'Setting Up' : 'Setup Runtime';
+    }
+  }
+
+  runtimeSetupBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (runtimeSetupBtn.disabled) return;
+    setRuntimeSetupState('loading', 'Waiting for VS Code confirmation...');
+    sendMessage({
+      action: 'BRIDGE_COMMAND',
+      payload: { action: 'SETUP_RUNTIME' }
+    });
+  });
 
   headerLocateBtn?.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -205,7 +231,16 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
             btn.textContent = 'Locate';
           }
         });
+        setRuntimeSetupState('error', 'VS Code Bridge not found. Start the bridge extension and try again.');
         setSelectionStatus('VS Code Bridge not found. Is the extension installed?', 'error');
+      } else if (msg.action === 'SETUP_RUNTIME_STARTED') {
+        setRuntimeSetupState('loading', msg.message || 'Installing runtime in VS Code...');
+      } else if (msg.action === 'SETUP_RUNTIME_SUCCESS') {
+        setRuntimeSetupState('success', msg.message || 'Runtime setup complete. Reload your app to stamp source locations.');
+      } else if (msg.action === 'SETUP_RUNTIME_CANCELLED') {
+        setRuntimeSetupState('idle', msg.message || 'Runtime setup cancelled in VS Code.');
+      } else if (msg.action === 'SETUP_RUNTIME_FAILED') {
+        setRuntimeSetupState('error', msg.error || 'Runtime setup failed in VS Code.');
       } else if (msg.action === 'SELECTOR_RESULTS') {
         console.log('[Panel] Bridge found matches:', msg.matches);
         

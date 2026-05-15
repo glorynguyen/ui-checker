@@ -17,6 +17,10 @@ Default bridge port:
 
 You can change the port in UI Checker's **Workspace Settings**.
 
+## Setup Runtime From Chrome
+
+Open UI Checker's **Workspace Settings**, expand **VS Code Bridge**, and click **Setup Runtime**. The Chrome extension sends a setup request to the VS Code bridge. VS Code will ask for confirmation before it runs your package manager and adds the `@ui-checker/runtime` import to the detected app entry file.
+
 ## Locate From Results
 
 After running a comparison:

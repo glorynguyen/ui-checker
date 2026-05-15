@@ -8,12 +8,14 @@ import { enumerateSearchableFiles, type FileEnumeratorDeps } from './file-enumer
 
 const vscodeDeps: FileEnumeratorDeps = {
   getConfiguration: (s) => vscode.workspace.getConfiguration(s),
-  findFiles: (inc, exc) => vscode.workspace.findFiles(inc, exc),
-  readFile: (uri) => vscode.workspace.fs.readFile(uri as unknown as vscode.Uri),
+  findFiles: (inc, exc) => Promise.resolve(vscode.workspace.findFiles(inc, exc)),
+  readFile: (uri) => Promise.resolve(vscode.workspace.fs.readFile(uri as unknown as vscode.Uri)),
 };
 
 let server: WebSocketServer | null = null;
 let statusBarItem: vscode.StatusBarItem;
+
+type PackageManager = 'npm' | 'yarn' | 'pnpm';
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('UI Checker Bridge is now active');
@@ -137,6 +139,36 @@ function startBridgeServer() {
               }
               updateStatus(false, port, 'Off');
             }, 50);
+            return;
+          }
+
+          if (data.action === 'SETUP_RUNTIME') {
+            const confirmed = await confirmRuntimeSetup();
+            if (!confirmed) {
+              ws.send(JSON.stringify({
+                action: 'SETUP_RUNTIME_CANCELLED',
+                message: 'Runtime setup cancelled in VS Code.'
+              }));
+              return;
+            }
+
+            ws.send(JSON.stringify({
+              action: 'SETUP_RUNTIME_STARTED',
+              message: 'Installing @ui-checker/runtime and updating the entry file...'
+            }));
+
+            const result = await setupRuntime();
+            if (result.ok) {
+              ws.send(JSON.stringify({
+                action: 'SETUP_RUNTIME_SUCCESS',
+                message: 'Runtime setup complete. Reload your app to stamp source locations.'
+              }));
+            } else {
+              ws.send(JSON.stringify({
+                action: 'SETUP_RUNTIME_FAILED',
+                error: result.error
+              }));
+            }
             return;
           }
 
@@ -280,8 +312,9 @@ async function openMatch(match: SearchMatch) {
 async function setupRuntime() {
   const folders = vscode.workspace.workspaceFolders;
   if (!folders || folders.length === 0) {
-    vscode.window.showErrorMessage('[UI Checker] No workspace folder open.');
-    return;
+    const error = 'No workspace folder open.';
+    vscode.window.showErrorMessage(`[UI Checker] ${error}`);
+    return { ok: false, error };
   }
 
   const root = folders[0].uri;
@@ -303,26 +336,41 @@ async function setupRuntime() {
     });
 
     vscode.window.showInformationMessage('[UI Checker] Runtime setup complete! @ui-checker/runtime installed and imported.');
+    return { ok: true };
   } catch (error: any) {
-    vscode.window.showErrorMessage(`[UI Checker] Setup failed: ${error.message}`);
+    const message = error?.message || 'Unknown setup error.';
+    vscode.window.showErrorMessage(`[UI Checker] Setup failed: ${message}`);
+    return { ok: false, error: message };
   }
 }
 
-async function detectPackageManager(root: vscode.Uri): Promise<'npm' | 'yarn' | 'pnpm'> {
-  const hasYarn = fs.existsSync(path.join(root.fsPath, 'yarn.lock'));
-  if (hasYarn) return 'yarn';
+async function confirmRuntimeSetup() {
+  const choice = await vscode.window.showWarningMessage(
+    '[UI Checker] Install @ui-checker/runtime and add an import to your project entry file?',
+    {
+      modal: true,
+      detail: 'This runs your package manager in the active VS Code workspace and edits the detected app entry file.'
+    },
+    'Install & Import'
+  );
+
+  return choice === 'Install & Import';
+}
+
+async function detectPackageManager(root: vscode.Uri): Promise<PackageManager> {
   const hasPnpm = fs.existsSync(path.join(root.fsPath, 'pnpm-lock.yaml'));
   if (hasPnpm) return 'pnpm';
+  const hasYarn = fs.existsSync(path.join(root.fsPath, 'yarn.lock'));
+  if (hasYarn) return 'yarn';
   return 'npm';
 }
 
-async function installRuntime(root: vscode.Uri, pkgManager: string) {
-  const installCmd = pkgManager === 'yarn' ? 'add' : 'install';
-  const fullCmd = `${pkgManager} ${installCmd} --save-dev @ui-checker/runtime`;
+async function installRuntime(root: vscode.Uri, pkgManager: PackageManager) {
+  const args = getInstallArgs(pkgManager);
+  const fullCmd = `${pkgManager} ${args.join(' ')}`;
   
   return new Promise<void>((resolve, reject) => {
-    const shell = process.platform === 'win32' ? 'cmd.exe' : '/bin/bash';
-    const proc = spawn(pkgManager, [installCmd, '--save-dev', '@ui-checker/runtime'], {
+    const proc = spawn(pkgManager, args, {
       cwd: root.fsPath,
       shell: true
     });
@@ -336,6 +384,16 @@ async function installRuntime(root: vscode.Uri, pkgManager: string) {
       reject(err);
     });
   });
+}
+
+function getInstallArgs(pkgManager: PackageManager) {
+  if (pkgManager === 'yarn') {
+    return ['add', '--dev', '@ui-checker/runtime'];
+  }
+  if (pkgManager === 'pnpm') {
+    return ['add', '--save-dev', '@ui-checker/runtime'];
+  }
+  return ['install', '--save-dev', '@ui-checker/runtime'];
 }
 
 async function injectImport(root: vscode.Uri) {

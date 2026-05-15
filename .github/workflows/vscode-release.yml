@@ -1,11 +1,10 @@
 name: Release VS Code Extension
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'vscode-bridge/**'
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
 
 concurrency:
   group: release-main
@@ -14,6 +13,7 @@ concurrency:
 jobs:
   release:
     name: Release
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -25,30 +25,61 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Pin to tested commit
+        run: |
+          git fetch origin main --tags
+          git reset --hard ${{ github.event.workflow_run.head_sha }}
+
+      - name: Check VS Code release changes
+        id: vscode_changes
+        run: |
+          last_tag="$(git describe --tags --match 'vscode-bridge-v*' --abbrev=0 2>/dev/null || true)"
+
+          if [ -z "$last_tag" ]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed_files="$(git diff --name-only "$last_tag..HEAD")"
+          printf '%s\n' "$changed_files"
+
+          if printf '%s\n' "$changed_files" | grep -Eq '^(vscode-bridge/|\.github/workflows/(ci|vscode-release)\.yml$)'; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No VS Code extension release changes found since $last_tag."
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Setup Node
+        if: steps.vscode_changes.outputs.has_changes == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 24.15.0
 
       - name: Install dependencies
+        if: steps.vscode_changes.outputs.has_changes == 'true'
         run: |
           npm ci
           cd vscode-bridge && npm ci
 
       - name: Build bridge
+        if: steps.vscode_changes.outputs.has_changes == 'true'
         run: npm run build:bridge
 
       - name: Run Tests
+        if: steps.vscode_changes.outputs.has_changes == 'true'
+        run: |
+          cd vscode-bridge && npm test
+
+      - name: Enforce coverage baseline
+        if: steps.vscode_changes.outputs.has_changes == 'true'
         run: |
           cd vscode-bridge && npm run test:coverage
 
-      - name: Sync release branch
-        run: |
-          git fetch origin main --tags
-          git reset --hard origin/main
-
       - name: Release
+        if: steps.vscode_changes.outputs.has_changes == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VSCE_PAT: ${{ secrets.VSCE_PAT }}

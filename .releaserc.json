@@ -1,7 +1,15 @@
 {
   "branches": ["main"],
   "plugins": [
-    "@semantic-release/commit-analyzer",
+    [
+      "@semantic-release/commit-analyzer",
+      {
+        "releaseRules": [
+          { "scope": "vscode-bridge", "release": false },
+          { "scope": "bridge", "release": false }
+        ]
+      }
+    ],
     "@semantic-release/release-notes-generator",
     [
       "semantic-release-chrome",
