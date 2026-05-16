@@ -78,6 +78,21 @@ By default, the Bridge uses port **9876**. If you have a port conflict:
 
 The connection will automatically handshake and show a `$(zap)` icon in the VS Code status bar when active.
 
+### Multi-Window Support
+The bridge port can only be held by one VS Code window at a time. 
+
+- **Auto-Takeover:** By default, the window you are currently focusing will automatically take over the bridge port (`ui-checker-bridge.autoTakeover`).
+- **Manual Retake:** You can manually trigger a takeover using the command: `UI Checker Bridge: Retake UI Checker Bridge Port`.
+
+---
+
+## Accessing Locate
+
+There are two primary ways to trigger a jump:
+
+1. **Active Selection (Hero Button):** When you pick an element, a **Locate in Editor** button appears in the header. This is the fastest way to jump while browsing.
+2. **Results List:** Click the **Locate** button next to any style mismatch in the comparison report.
+
 ---
 
 ## Troubleshooting

@@ -24,7 +24,7 @@ The extension is built around a fast loop:
 | CSS variable workflow | Resolve, override, save, import, and export `var()` fallback mappings. |
 | Visual overlay | Compare selected element screenshots with Figma images using onion-skin, side-by-side, and pixel-diff views. |
 | Design tokens | Import token JSON and flag hardcoded or unmapped expected values. |
-| VS Code bridge | Jump from a mismatch in DevTools to likely source code in VS Code. |
+| VS Code bridge | Jump from a mismatch or active selection in DevTools to source code in VS Code. |
 | CI runner | Run style checks outside Chrome from a JSON config. |
 
 ## Recommended First Run

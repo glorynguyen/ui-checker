@@ -20,10 +20,10 @@ Ship UI that matches the design without relying on eyeballing. The extension giv
 | CSS variable workflow | Implemented | `var()` parsing, fallback display, override editing, save/load/import/export mappings |
 | Visual overlay comparison | Implemented | Element capture, Figma image upload/paste, onion-skin, side-by-side, pixel diff heatmap |
 | VS Code Bridge | Implemented | Local WebSocket bridge, smart search, and marketplace extension |
-| Figma API integration | Partially implemented | Personal access token auth, file key + node URL parsing, node fetch, image fetch, tab sync, short-term local cache |
-| Design token validation | Not implemented | No token import, token coverage, or token suggestions found |
+| Figma API integration | Implemented | Personal access token auth, file key + node URL parsing, node fetch, image fetch, tab sync, automated component matching, and caching |
+| Design token validation | Implemented | JSON token import, hardcoded-value detection, and token suggestions |
 | AI vision comparison | Not implemented | No model integration or screenshot-to-LLM flow found |
-| CI/CD integration | Partially implemented | Style-only CLI runner, config validation, and JSON/Markdown reports are implemented; no GitHub Action, PR comments, visual CI, or baseline approval yet |
+| CI/CD integration | Partially implemented | Style-only CLI runner, config validation, and JSON/Markdown/HTML reports are implemented; no GitHub Action, PR comments, or visual CI yet |
 
 ---
 
@@ -57,6 +57,7 @@ Ship UI that matches the design without relying on eyeballing. The extension giv
 - Side-by-side comparison view
 - Pixel-diff mode with configurable sensitivity and match percentage output
 - Auto-fetch of a Figma-rendered node image when Figma node data is fetched successfully
+- **Smart Shift Detection**: Automatic X/Y alignment search (±10px) to minimize pixel differences
 
 ### VS Code Integration (Bridge)
 
@@ -107,34 +108,27 @@ Notes:
 
 ### Phase 3 — Figma API Integration
 
-**Status:** Partially implemented
+**Status:** Implemented
 
 Implemented:
 - Figma personal access token setup stored in `chrome.storage.local`
 - Paste a Figma frame/layer URL and extract file key + node ID
 - Fetch node data from the Figma REST API
 - Fetch rendered node image from the Figma REST API
-- Short-term local caching of fetched node data and rendered images
+- Short-term local caching of fetched node data, rendered images, and component lists
 - Sync file key and node ID from an open Figma browser tab
 - Auto-fill node ID from `data-figma-id` when present on the selected DOM element
-
-Not found in the current codebase:
-- Component name matching between Figma and DOM using heuristics
-- Manual mapping between Figma components and DOM components
-- Variant-aware comparison flow beyond basic node fetches
-
-Conclusion:
-- The integration foundation is in place, but the "copy-paste free" workflow is not fully complete yet.
+- **Automated Component Matching**: Link DOM elements to Figma nodes by matching component names (`data-uic-name`) against the Figma file's component list.
 
 ### Phase 4 — Design Token Validation
 
-**Status:** Not implemented
+**Status:** Implemented
 
-Not found:
-- Import of design token files
+Implemented:
+- Import of W3C-style and flat JSON token files
 - Validation of hardcoded values against tokens
-- Token coverage reporting
-- Closest-token suggestions
+- Token coverage reporting in results
+- Distance-based closest token suggestions for colors and dimensions
 
 ### Phase 5 — AI Vision Comparison
 
@@ -158,11 +152,10 @@ Implemented:
 - Figma node fetch through the existing REST API client
 - Reuse of existing parser, normalizer, and diff engine
 - Failure-threshold classification
-- JSON and Markdown CI report generation
+- JSON, Markdown, and HTML CI report generation
 
 Not found:
 - Baseline storage and approval workflow
-- HTML CI artifact generation
 - GitHub Action or other hosted CI wrapper
 - PR comment publishing
 - Visual screenshot/pixel-diff CI mode

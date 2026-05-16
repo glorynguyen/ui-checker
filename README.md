@@ -8,12 +8,15 @@ A Chrome DevTools extension that helps frontend developers catch visual discrepa
 
 - **Direct Figma Integration**: Fetch live design data directly from the Figma REST API — no proxy or bridge server required.
 - **Figma Fetch Cache**: Reuse recently fetched node specs and rendered image URLs for faster repeat comparisons, with **Refresh Live** when you need fresh design data.
+- **Automated Component Matching**: Automatically find the matching Figma node based on React component names extracted from the browser.
 - **Smart URL Parsing**: Paste a full Figma URL and the tool automatically extracts the File Key and Node ID.
 - **Visual Element Picker**: Hover-highlight and click-select elements on your page to extract 40+ computed styles.
 - **One-Click Fixes**: Click the "Fix" button next to any mismatch to copy the correct Figma CSS to your clipboard.
 - **VS Code Integration**: Use the [UI Checker Bridge](https://marketplace.visualstudio.com/items?itemName=VinhNguyen-Vincent.ui-checker-bridge) extension to instantly jump from a browser element to its source code in VS Code.
 - **CSS Variable Support**: Detects `var()` syntax, displays variable names, and allows overriding fallbacks.
-- **Visual Overlay**: Onion-skin, side-by-side, and pixel-diff heatmaps to catch compositional issues.
+- **Visual Overlay**: Onion-skin, side-by-side, and pixel-diff heatmaps to catch compositional issues. Includes **Smart Shift Detection** to automatically align design and browser images.
+- **Saved Checks**: Link DOM selectors to Figma nodes, save them as reusable checks, and rerun the page checklist from DevTools.
+- **Bridge-Assisted Fixes**: Apply safe CSS declaration replacements through the VS Code Bridge when the source location can be resolved.
 
 ---
 
@@ -83,6 +86,7 @@ This repo now uses Node's built-in test runner, so you can run unit tests withou
 - `npm test` — run the unit test suite
 - `npm run test:watch` — rerun tests on file changes
 - `npm run test:coverage` — run tests with a coverage report across shared libs and the content script
+- `npm run ci:check -- --config ui-checker.config.json --html ui-checker-report.html` — run configured UI checks and write an HTML artifact
 
 ### Coverage Management
 

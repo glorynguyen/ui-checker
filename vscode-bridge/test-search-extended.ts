@@ -50,10 +50,10 @@ test('Case Insensitivity for Properties/Values', () => {
   assert.ok(result);
   assert.equal(result.line, 0);
   // 10 (card is utility prefix? wait, c- is not. card is semantic -> 30)
-  // 30 (class) + 50 (property match because lineMatchCount > 0) = 80 base
-  // 80 * 0.15 = 12 bonus
-  // Total = 92
-  assert.equal(result.score, 92);
+  // 30 (class) + 10 (property file bonus) = 40 base
+  // 40 * 0.15 = 6 bonus
+  // Total = 46
+  assert.equal(result.score, 46);
 });
 
 test('Special Characters in IDs and Classes', () => {
@@ -157,4 +157,66 @@ test('Complex score with property but no token match on that line', () => {
   // Best line should be line 1 because it has the token, even though line 2 has the property.
   // lineScores[1] = 30, lineScores[2] = 20.
   assert.equal(result.line, 1);
+});
+
+test('Active file and source name hints boost the likely component line', () => {
+  const tokens = tokenize('.target');
+  const content = [
+    'export function ProductCard() {',
+    '  return <div className="target">Card</div>;',
+    '}'
+  ].join('\n');
+
+  const result = SearchLogic.scoreFile(
+    '/repo/ProductCard.tsx',
+    content,
+    tokens,
+    '/repo/ProductCard.tsx',
+    undefined,
+    undefined,
+    undefined,
+    'ProductCard'
+  );
+
+  assert.ok(result);
+  assert.equal(result.line, 0);
+  // class 30 + source-name 60 + active-file 50 + tsx bonus capped at 15
+  assert.equal(result.score, 155);
+});
+
+test('Invalid source names and unmatched property keys do not add hint bonuses', () => {
+  const tokens = tokenize('.target');
+  const content = [
+    'export function ProductCard() {',
+    '  return <div className="target">Card</div>;',
+    '}'
+  ].join('\n');
+
+  const result = SearchLogic.scoreFile(
+    '/repo/ProductCard.tsx',
+    content,
+    tokens,
+    null,
+    'padding-left',
+    undefined,
+    undefined,
+    'Product-Card'
+  );
+
+  assert.ok(result);
+  assert.equal(result.score, 36);
+});
+
+test('Ancestor helper handles ids, tags, utility skips, and caps score', () => {
+  const ancestorTokens = tokenize('section#sidebar.modal.p-4.extra.another.more');
+  const content = '<section id="sidebar" class="modal extra another more p-4"></section>';
+
+  assert.equal(SearchLogic._scoreAncestor(content, ancestorTokens, false), 20);
+  assert.equal(SearchLogic._fileMentionsAncestor(content, tokenize('.modal')), true);
+  assert.equal(SearchLogic._fileMentionsAncestor(content, tokenize('.missing')), false);
+});
+
+test('findLine falls back to the first line when no pattern is present', () => {
+  assert.equal(SearchLogic._findLine(['alpha', 'beta'], 'beta'), 1);
+  assert.equal(SearchLogic._findLine(['alpha', 'beta'], 'gamma'), 0);
 });

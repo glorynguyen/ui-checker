@@ -8,7 +8,7 @@ The CI runner executes style checks outside the Chrome extension. It is useful f
 ## Run A Check
 
 ```bash
-npm run ci:check -- --config ui-checker.config.json --json ui-checker-report.json --markdown ui-checker-report.md
+npm run ci:check -- --config ui-checker.config.json --json ui-checker-report.json --markdown ui-checker-report.md --html ui-checker-report.html
 ```
 
 ## Example Config
@@ -54,7 +54,8 @@ If you use another variable name, set `figmaTokenEnv` in the config.
 The runner can write:
 
 - JSON report for machines;
-- Markdown report for pull requests or review threads.
+- Markdown report for pull requests or review threads;
+- HTML report for standalone visual inspection.
 
 The process exits non-zero when configured failure thresholds are exceeded.
 

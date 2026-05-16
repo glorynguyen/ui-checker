@@ -2,6 +2,10 @@
 // Injected into every page. Activates picker on message from panel.
 
 (function () {
+  const w = window as unknown as { __UI_CHECKER_CONTENT_INSTALLED__?: boolean };
+  if (w.__UI_CHECKER_CONTENT_INSTALLED__) return;
+  w.__UI_CHECKER_CONTENT_INSTALLED__ = true;
+
   let pickerActive = false;
   let highlightEl: HTMLElement | null = null;
   let tooltipEl: HTMLElement | null = null;
@@ -256,15 +260,20 @@
       } else {
         chrome.runtime.sendMessage({ action: 'SELECTOR_NOT_FOUND', selector: msg.selector });
       }
+    } else if (msg.action === 'EXTRACT_SELECTOR') {
+      const target = queryElement(msg.selector);
+      if (!target) {
+        sendResponse({ error: `No match found for "${msg.selector}".` });
+        return true;
+      }
+      sendResponse({ data: extractStyles(target) });
+      return true;
     } else if (msg.action === 'GET_ELEMENT_RECT') {
       // Return the bounding rect via sendResponse
-      console.log('[Content] GET_ELEMENT_RECT, selector:', msg.selector, 'selectedElement:', !!selectedElement, 'lastTarget:', !!lastTarget);
       const queried = queryElement(msg.selector);
-      console.log('[Content] query result:', !!queried, 'for selector:', msg.selector);
       let target: HTMLElement | null = queried || selectedElement || lastTarget;
       if (target) {
         const rect = target.getBoundingClientRect();
-        console.log('[Content] Sending rect:', { viewportX: Math.round(rect.left), viewportY: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) }, 'dpr:', window.devicePixelRatio);
         sendResponse({
           rect: {
             x: Math.round(rect.left + window.scrollX),
@@ -277,7 +286,6 @@
           devicePixelRatio: window.devicePixelRatio || 1
         });
       } else {
-        console.warn('[Content] No target element found for GET_ELEMENT_RECT');
         sendResponse({ error: true });
       }
       return true; // Keep message channel open for sendResponse

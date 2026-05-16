@@ -25,11 +25,11 @@
   ],
   "permissions": [
     "activeTab",
+    "scripting",
     "storage",
     "tabs"
   ],
   "host_permissions": [
-    "<all_urls>",
     "https://api.figma.com/*"
   ]
 }

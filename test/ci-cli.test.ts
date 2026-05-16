@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { loadConfig, validateConfig, resolveFigmaToken } from '../cli/config';
 import { classifyDiff } from '../cli/core/classify';
-import { renderMarkdownReport, buildRunReport, writeJsonReport, writeMarkdownReport } from '../cli/report';
+import { renderHtmlReport, renderMarkdownReport, buildRunReport, writeHtmlReport, writeJsonReport, writeMarkdownReport } from '../cli/report';
 import { resolveCheckUrl, runChecks } from '../cli/runner';
 import { extractExpression, waitForSelectorExpression } from '../cli/adapters/dom-extractor';
 
@@ -227,10 +227,13 @@ test('CI report rendering covers passed and errored checks and escapes table cel
   try {
     const jsonPath = join(dir, 'report.json');
     const mdPath = join(dir, 'report.md');
+    const htmlPath = join(dir, 'report.html');
     await writeJsonReport(jsonPath, report);
     await writeMarkdownReport(mdPath, report);
+    await writeHtmlReport(htmlPath, report);
     assert.match(await readFile(jsonPath, 'utf8'), /"status": "errored"/);
-  assert.match(await readFile(mdPath, 'utf8'), /Selector missing/);
+    assert.match(await readFile(mdPath, 'utf8'), /Selector missing/);
+    assert.match(await readFile(htmlPath, 'utf8'), /UI Checker CI Report/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -262,6 +265,34 @@ test('CI report rendering covers passed and errored checks and escapes table cel
       }
     }
   ])), /n\/a/);
+});
+
+test('CI HTML report escapes content and summarizes mismatches', () => {
+  const report = buildRunReport([
+    {
+      name: '<Button>',
+      status: 'failed',
+      url: 'http://localhost/button',
+      selector: '.primary',
+      figmaFileKey: 'file',
+      figmaNodeId: '1:2',
+      diff: {
+        summary: { total: 2, matched: 1, mismatched: 1, missing: 0 },
+        results: [
+          { property: 'color', status: 'match', expected: 'red', actual: 'red' },
+          { property: 'padding-left', status: 'mismatch', expected: '16px', actual: '12px', severity: 'major' }
+        ]
+      }
+    }
+  ]);
+
+  const html = renderHtmlReport(report);
+
+  assert.match(html, /Status: <strong>failed<\/strong>/);
+  assert.match(html, /&lt;Button&gt;/);
+  assert.match(html, /padding-left/);
+  assert.match(html, /16px/);
+  assert.doesNotMatch(html, /<Button>/);
 });
 
 test('CI URL resolution supports relative paths and absolute URLs', () => {

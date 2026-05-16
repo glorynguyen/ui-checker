@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 import { loadConfig, resolveFigmaToken } from './config';
-import { writeJsonReport, writeMarkdownReport } from './report';
+import { writeHtmlReport, writeJsonReport, writeMarkdownReport } from './report';
 import { runChecks } from './runner';
 
 type CliArgs = {
   config: string;
   json?: string;
   markdown?: string;
+  html?: string;
 };
 
 async function main() {
@@ -17,8 +18,9 @@ async function main() {
 
   if (args.json) await writeJsonReport(args.json, report);
   if (args.markdown) await writeMarkdownReport(args.markdown, report);
+  if (args.html) await writeHtmlReport(args.html, report);
 
-  if (!args.json && !args.markdown) {
+  if (!args.json && !args.markdown && !args.html) {
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   }
 
@@ -38,6 +40,9 @@ function parseArgs(argv: string[]): CliArgs {
       index += 1;
     } else if (arg === '--markdown') {
       args.markdown = requireValue(arg, next);
+      index += 1;
+    } else if (arg === '--html') {
+      args.html = requireValue(arg, next);
       index += 1;
     } else if (arg === '--help' || arg === '-h') {
       printHelp();
@@ -65,12 +70,13 @@ function printHelp() {
   process.stdout.write(`ui-checker-ci
 
 Usage:
-  ui-checker-ci --config ui-checker.config.json --json ui-checker-report.json --markdown ui-checker-report.md
+  ui-checker-ci --config ui-checker.config.json --json ui-checker-report.json --markdown ui-checker-report.md --html ui-checker-report.html
 
 Options:
   --config     Path to the UI Checker CI config JSON.
   --json       Optional JSON report output path.
   --markdown   Optional Markdown report output path.
+  --html       Optional HTML report output path.
 `);
 }
 

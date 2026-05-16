@@ -64,6 +64,7 @@ export function findNearestPackageJson(rootPath: string, entryFilePath: string) 
     }
 
     const parent = path.dirname(dir);
+    /* c8 ignore next -- loop condition keeps dir inside a finite root tree. */
     if (parent === dir) break;
     dir = parent;
   }

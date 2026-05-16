@@ -43,6 +43,13 @@ test('findKnownRuntimeEntryFile supports Next app router layout', () => {
   assert.equal(findKnownRuntimeEntryFile(root), layout);
 });
 
+test('findKnownRuntimeEntryFile returns null when no known entry exists', () => {
+  const root = makeTempWorkspace();
+  writeFile(path.join(root, 'src', 'server.ts'));
+
+  assert.equal(findKnownRuntimeEntryFile(root), null);
+});
+
 test('findNearestPackageJson uses closest package for monorepo apps', () => {
   const root = makeTempWorkspace();
   const rootPackage = path.join(root, 'package.json');
@@ -53,6 +60,17 @@ test('findNearestPackageJson uses closest package for monorepo apps', () => {
   writeFile(entry);
 
   assert.equal(findNearestPackageJson(root, entry), appPackage);
+});
+
+test('findNearestPackageJson falls back to root package when entry is outside root', () => {
+  const root = makeTempWorkspace();
+  const outside = makeTempWorkspace();
+  const rootPackage = path.join(root, 'package.json');
+  const entry = path.join(outside, 'src', 'main.tsx');
+  writeFile(rootPackage, '{"name":"root"}\n');
+  writeFile(entry);
+
+  assert.equal(findNearestPackageJson(root, entry), rootPackage);
 });
 
 test('findNearestPackageJson reports missing package.json clearly', () => {
@@ -88,6 +106,20 @@ test('addRuntimeToPackageJson adds runtime as devDependency without removing exi
   assert.equal(pkg.devDependencies[RUNTIME_PACKAGE_NAME], RUNTIME_PACKAGE_VERSION);
 });
 
+test('addRuntimeToPackageJson creates devDependencies and preserves compact formatting fallback', () => {
+  const root = makeTempWorkspace();
+  const packageJson = path.join(root, 'package.json');
+  writeFile(packageJson, '{"name":"app"}\n');
+
+  const changed = addRuntimeToPackageJson(packageJson);
+  const written = fs.readFileSync(packageJson, 'utf8');
+  const pkg = JSON.parse(written);
+
+  assert.equal(changed, true);
+  assert.equal(pkg.devDependencies[RUNTIME_PACKAGE_NAME], RUNTIME_PACKAGE_VERSION);
+  assert.match(written, /\n  "devDependencies"/);
+});
+
 test('addRuntimeToPackageJson is a no-op when runtime already exists anywhere', () => {
   const root = makeTempWorkspace();
   const packageJson = path.join(root, 'package.json');
@@ -115,4 +147,9 @@ test('getRuntimeImportInsertLine inserts after shebang and directives', () => {
   ].join('\n');
 
   assert.equal(getRuntimeImportInsertLine(source), 3);
+});
+
+test('getRuntimeImportInsertLine handles files without shebang or directives', () => {
+  assert.equal(getRuntimeImportInsertLine('import React from "react";\n'), 0);
+  assert.equal(getRuntimeImportInsertLine(''), 0);
 });

@@ -978,6 +978,117 @@ body {
   flex: 1 1 240px;
 }
 
+.saved-check-name {
+  flex: 1 1 180px;
+}
+
+.saved-check-list,
+.batch-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.saved-check-row,
+.batch-result-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.025);
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+.saved-check-meta,
+.batch-result-meta {
+  min-width: 0;
+}
+
+.saved-check-title,
+.batch-result-title {
+  color: var(--text-bright);
+  font-weight: 700;
+  margin-bottom: 3px;
+}
+
+.saved-check-detail,
+.batch-result-detail {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-check-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.batch-results-section {
+  background: var(--bg-surface);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 18px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-soft);
+}
+
+.batch-result-row.passed {
+  border-color: rgba(60, 207, 145, 0.22);
+}
+
+.batch-result-row.failed {
+  border-color: rgba(255, 107, 129, 0.28);
+}
+
+.batch-result-row.errored {
+  border-color: rgba(255, 202, 98, 0.28);
+}
+
+.variant-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 1fr 60px;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  align-items: center;
+}
+
+.variant-row:last-child {
+  border-bottom: none;
+}
+
+.variant-prop-name {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.variant-value {
+  font-size: 12px;
+  color: var(--text-bright);
+}
+
+.variant-status {
+  justify-self: end;
+}
+
+.badge-variant {
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.badge-variant.match { color: #3ccf91; background: rgba(60,207,145,0.1); }
+.badge-variant.mismatch { color: #ff6b81; background: rgba(255,107,129,0.1); }
+.badge-variant.unmapped { color: #aab4c3; background: rgba(170,180,195,0.1); }
+
 .comparison-workspace {
   animation: fadeIn 0.22s ease forwards;
 }
@@ -1300,6 +1411,18 @@ body {
   overflow: hidden;
 }
 
+.overlay-align-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: 8px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+
+.overlay-align-row .input-field {
+  width: 100%;
+}
+
 .overlay-canvas {
   box-shadow: 0 4px 20px rgba(0,0,0,0.5);
 }
@@ -1393,8 +1516,13 @@ body {
 
   .selector-row,
   .mapping-controls,
-  .actions {
+  .actions,
+  .overlay-align-row {
     flex-direction: column;
+  }
+
+  .overlay-align-row {
+    display: flex;
   }
 
   .field-grid {

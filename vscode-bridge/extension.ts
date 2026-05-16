@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { WebSocketServer, WebSocket } from 'ws';
+import { findEditableDeclaration } from './apply-fix';
+import { extractJsxProps } from './jsx-parser';
 import { SearchLogic, SearchMatch } from './search-logic';
 import { enumerateSearchableFiles, type FileEnumeratorDeps } from './file-enumerator';
 import {
@@ -203,6 +205,39 @@ function startBridgeServer() {
               await openMatch(matches[0]);
             }
           }
+
+          if (data.action === 'APPLY_FIX') {
+            const result = await applyFix(data);
+            ws.send(JSON.stringify({
+              action: 'APPLY_FIX_RESULT',
+              ...result
+            }));
+          }
+
+          if (data.action === 'GET_PROPS') {
+            const exact = data.sourceLoc ? await resolveExactSourceLoc(data.sourceLoc) : null;
+            const matches = exact
+              ? [exact]
+              : await findSelectorInWorkspace(data.selector, data.property, data.value, data.ancestors, data.sourceName);
+            const match = matches[0];
+
+            if (match) {
+              const document = await vscode.workspace.openTextDocument(match.file);
+              const text = document.getText();
+              const offset = document.offsetAt(new vscode.Position(match.line, match.column ?? 0));
+              const props = extractJsxProps(text, offset);
+              ws.send(JSON.stringify({
+                action: 'PROPS_RESULT',
+                props,
+                file: match.file
+              }));
+            } else {
+              ws.send(JSON.stringify({
+                action: 'PROPS_RESULT',
+                error: 'Could not find source file to extract props.'
+              }));
+            }
+          }
         } catch (e) {
           console.error('[Bridge] Message error:', e);
         }
@@ -326,6 +361,60 @@ async function openMatch(match: SearchMatch) {
   const pos = new vscode.Position(match.line, match.column ?? 0);
   editor.selection = new vscode.Selection(pos, pos);
   editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
+}
+
+async function applyFix(data: any) {
+  const exact = data.sourceLoc ? await resolveExactSourceLoc(data.sourceLoc) : null;
+  const matches = exact
+    ? [exact]
+    : await findSelectorInWorkspace(data.selector, data.property, data.value, data.ancestors, data.sourceName);
+  const match = matches[0];
+
+  if (!match) {
+    return { ok: false, error: 'No source file found for this element.' };
+  }
+
+  const property = String(data.property || '').trim();
+  const declaration = String(data.declaration || '').trim();
+  if (!property || !declaration.includes(':')) {
+    return { ok: false, error: 'The fix declaration was incomplete.' };
+  }
+
+  const expectedValue = declaration.slice(declaration.indexOf(':') + 1).replace(/[;,]\s*$/, '').trim();
+  const document = await vscode.workspace.openTextDocument(match.file);
+  const text = document.getText();
+  const editTarget = findEditableDeclaration(text, match.line, property);
+
+  if (!editTarget) {
+    await openMatch(match);
+    return {
+      ok: false,
+      file: match.file,
+      error: `Opened the likely source, but no safe "${property}" declaration was found nearby.`
+    };
+  }
+
+  const confirmed = await vscode.window.showWarningMessage(
+    `[UI Checker] Replace ${property} with ${expectedValue}?`,
+    { modal: true, detail: match.file },
+    'Apply Fix'
+  );
+
+  if (confirmed !== 'Apply Fix') {
+    return { ok: false, file: match.file, error: 'Fix cancelled in VS Code.' };
+  }
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.replace(
+    vscode.Uri.file(match.file),
+    new vscode.Range(document.positionAt(editTarget.start), document.positionAt(editTarget.end)),
+    editTarget.replacementPrefix + expectedValue + editTarget.replacementSuffix
+  );
+
+  await vscode.workspace.applyEdit(edit);
+  await document.save();
+  await openMatch(match);
+  return { ok: true, file: match.file };
 }
 
 async function setupRuntime() {

@@ -48,6 +48,16 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
   const tokenStatus = document.getElementById('token-status') as HTMLElement;
   const runtimeSetupBtn = document.getElementById('runtime-setup-btn') as HTMLButtonElement;
   const runtimeSetupStatus = document.getElementById('runtime-setup-status') as HTMLElement;
+  const savedCheckNameInput = document.getElementById('saved-check-name') as HTMLInputElement;
+  const savedCheckSaveBtn = document.getElementById('saved-check-save-btn') as HTMLButtonElement;
+  const savedCheckRunBtn = document.getElementById('saved-check-run-btn') as HTMLButtonElement;
+  const savedCheckList = document.getElementById('saved-check-list') as HTMLElement;
+  const savedCheckStatus = document.getElementById('saved-check-status') as HTMLElement;
+  const batchResultsSection = document.getElementById('batch-results-section') as HTMLElement;
+  const batchResultsList = document.getElementById('batch-results-list') as HTMLElement;
+  const debugLoggingToggle = document.getElementById('debug-logging-toggle') as HTMLInputElement;
+  const figmaTokenClearBtn = document.getElementById('figma-token-clear-btn') as HTMLButtonElement;
+  const figmaTokenStatus = document.getElementById('figma-token-status') as HTMLElement;
 
   // --- State ---
   let extractedData: any = null; // { element, dimensions, styles }
@@ -59,14 +69,43 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
   let figmaFetchPending = 0;
   let figmaSpecHighlightTimer: number | null = null;
   let designTokens: DesignToken[] = [];
+  let debugLogging = false;
+  let lastFetchedProps: any[] | null = null;
+  let lastFigmaProperties: Record<string, any> | null = null;
+
+  type SavedCheck = {
+    id: string;
+    name: string;
+    selector: string;
+    figmaFileKey: string;
+    figmaNodeId: string;
+    tolerance: ReturnType<typeof getTolerance>;
+    varOverrides?: Record<string, string>;
+    createdAt: string;
+  };
+
+  type PendingRequest = {
+    resolve: (value: any) => void;
+    reject: (reason?: any) => void;
+  };
+
+  const pendingSelectorRequests = new Map<number, PendingRequest>();
+  const pendingNodeRequests = new Map<number, PendingRequest>();
+  let nextBatchRequestId = 1;
 
   const headerLocateBtn = document.getElementById('header-locate-btn') as HTMLButtonElement;
 
+  function debugLog(...args: unknown[]) {
+    if (debugLogging) {
+      console.log(...args);
+    }
+  }
+
   function logRuntimeSetup(event: string, details?: Record<string, unknown>) {
     if (details) {
-      console.log(`[Panel][RuntimeSetup] ${event}`, details);
+      debugLog(`[Panel][RuntimeSetup] ${event}`, details);
     } else {
-      console.log(`[Panel][RuntimeSetup] ${event}`);
+      debugLog(`[Panel][RuntimeSetup] ${event}`);
     }
   }
 
@@ -222,7 +261,7 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
     }
     if (port) {
       port.onMessage.addListener((msg: any) => {
-      console.log('[Panel] Port message received:', msg.action);
+      debugLog('[Panel] Port message received:', msg.action);
       
       if (msg.action === 'BRIDGE_CONNECTED') {
         const bridgeBadge = document.getElementById('bridge-status');
@@ -262,7 +301,7 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
         logRuntimeSetup('VS Code failed setup', { error: msg.error });
         setRuntimeSetupState('error', msg.error || 'Runtime setup failed in VS Code.');
       } else if (msg.action === 'SELECTOR_RESULTS') {
-        console.log('[Panel] Bridge found matches:', msg.matches);
+        debugLog('[Panel] Bridge found matches:', msg.matches);
         
         // Find all active searching buttons and update them
         const searchingButtons = document.querySelectorAll('.bridge-btn.loading') as NodeListOf<HTMLButtonElement>;
@@ -300,6 +339,8 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
           const prefix = msg.exact ? 'Exact source: ' : 'Opened ';
           setSelectionStatus(`${prefix}${fileName}`, 'success');
         }
+      } else if (msg.action === 'APPLY_FIX_RESULT') {
+        setSelectionStatus(msg.ok ? `Applied fix in ${msg.file?.split('/').pop() || 'VS Code'}.` : (msg.error || 'Could not apply fix automatically.'), msg.ok ? 'success' : 'error');
       }
       
       // New: Handle MCP responses
@@ -321,7 +362,7 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
         guideToFigmaSpec('Figma fetch failed. Paste the spec here or try fetching again.');
       } else if (msg.action === 'MCP_NODE_DATA') {
         if (!isActiveFigmaResponse(msg)) return;
-        console.log('[Panel] Received MCP Node Data:', msg.data);
+        debugLog('[Panel] Received MCP Node Data');
         figmaInput.value = JSON.stringify(msg.data, null, 2);
         clearFigmaSpecHighlight();
         figmaFetchStatus.node = msg.meta || null;
@@ -330,18 +371,26 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
         updateCompareBtn();
       } else if (msg.action === 'MCP_IMAGE_DATA') {
         if (!isActiveFigmaResponse(msg)) return;
-        console.log('[Panel] Received MCP Image URL:', msg.imageUrl);
+        debugLog('[Panel] Received MCP Image URL');
         figmaFetchStatus.image = msg.meta || null;
         renderFigmaCacheStatus();
         loadFigmaImageUrl(msg.imageUrl);
         markFigmaFetchComplete();
       } else if (msg.action === 'MCP_IMAGE_FETCH_FAILED') {
         if (!isActiveFigmaResponse(msg)) return;
-        console.warn('[Panel] Figma visual fetch failed:', msg.error);
+        debugLog('[Panel] Figma visual fetch failed:', msg.error);
         figmaFetchStatus.image = null;
         renderFigmaCacheStatus();
         markFigmaFetchComplete();
         // Silently fail or show a subtle hint that visual overlay won't auto-load
+      } else if (msg.action === 'MCP_COMPONENTS_DATA') {
+        if (!isActiveFigmaResponse(msg)) return;
+        handleComponentsMatched(msg.components);
+        markFigmaFetchComplete();
+      } else if (msg.action === 'MCP_COMPONENTS_FETCH_FAILED') {
+        if (!isActiveFigmaResponse(msg)) return;
+        setSelectionStatus('Failed to fetch components: ' + msg.error, 'error');
+        markFigmaFetchComplete();
       } else if (msg.action === 'FIGMA_TAB_SYNCED') {
         if (msg.fileKey || msg.nodeId) {
           if (msg.fileKey) {
@@ -354,7 +403,7 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
           if (msg.nodeId) {
             mcpNodeIdInput.value = msg.nodeId;
           }
-          console.log('[Panel] Synced from Figma tab:', msg);
+          debugLog('[Panel] Synced from Figma tab:', msg);
           if (msg.fileKey && msg.nodeId && mcpTokenInput.value.trim()) {
             fetchFigmaNodeWithOptions(msg.nodeId, { forceRefresh: false });
           }
@@ -372,7 +421,7 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
             if (parsed.nodeId) {
               mcpNodeIdInput.value = parsed.nodeId;
             }
-            console.log('[Panel] Synced from Figma tab:', parsed);
+            debugLog('[Panel] Synced from Figma tab:', parsed);
           }
         }
       } else if (msg.action === 'FIGMA_TAB_SYNC_FAILED') {
@@ -381,6 +430,20 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
         onElementCaptured(msg);
       } else if (msg.action === 'ELEMENT_CAPTURE_FAILED') {
         onElementCaptureFailed(msg);
+      } else if (msg.action === 'CONTENT_SCRIPT_INJECTION_FAILED') {
+        setSelectionStatus(msg.error || 'Unable to prepare the inspected tab.', 'error');
+      } else if (msg.action === 'BATCH_SELECTOR_EXTRACTED') {
+        settlePendingRequest(pendingSelectorRequests, msg);
+      } else if (msg.action === 'BATCH_NODE_DATA') {
+        settlePendingRequest(pendingNodeRequests, msg);
+      } else if (msg.action === 'BATCH_NODE_FAILED') {
+        settlePendingRequest(pendingNodeRequests, msg);
+      } else if (msg.action === 'PROPS_RESULT') {
+        debugLog('[Panel] Received JSX Props from Bridge', msg.props);
+        lastFetchedProps = msg.props || [];
+        if (figmaInput.value.trim()) {
+          runComparison();
+        }
       }
 
       if (msg.action === 'ELEMENT_SELECTED') {
@@ -396,7 +459,7 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
     });
 
     port.onDisconnect.addListener(() => {
-      console.log('[Panel] Port disconnected');
+      debugLog('[Panel] Port disconnected');
       port = null;
     });
     }
@@ -488,16 +551,16 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
   function sendMessage(msg: any) {
     // MV3 service workers go idle after ~30s. Reconnect if null or disconnected.
     if (!port) {
-      console.log('[Panel] Port is null, reconnecting before send');
+      debugLog('[Panel] Port is null, reconnecting before send');
       connectPort();
     }
     
     try {
       port?.postMessage(msg);
-      console.log('[Panel] postMessage sent:', msg.action);
+      debugLog('[Panel] postMessage sent:', msg.action);
     } catch (e: any) {
       if (checkContext(e)) return;
-      console.warn('[Panel] postMessage failed, reconnecting:', e.message);
+      debugLog('[Panel] postMessage failed, reconnecting:', e.message);
       try {
           connectPort();
           port?.postMessage(msg);
@@ -505,6 +568,33 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
           console.error('[Panel] Critical port failure:', e2);
       }
     }
+  }
+
+  function settlePendingRequest(store: Map<number, PendingRequest>, msg: any) {
+    const request = store.get(msg.requestId);
+    if (!request) return;
+    store.delete(msg.requestId);
+    if (msg.error) {
+      request.reject(new Error(msg.error));
+      return;
+    }
+    request.resolve(msg.data ?? msg);
+  }
+
+  function requestSelectorExtraction(selector: string): Promise<any> {
+    const requestId = nextBatchRequestId++;
+    return new Promise((resolve, reject) => {
+      pendingSelectorRequests.set(requestId, { resolve, reject });
+      sendMessage({ action: 'BATCH_EXTRACT_SELECTOR', selector, requestId });
+    });
+  }
+
+  function requestFigmaNode(fileKey: string, nodeId: string): Promise<any> {
+    const requestId = nextBatchRequestId++;
+    return new Promise((resolve, reject) => {
+      pendingNodeRequests.set(requestId, { resolve, reject });
+      sendMessage({ action: 'BATCH_GET_NODE', fileKey, nodeId, requestId });
+    });
   }
 
   function checkContext(e: any) {
@@ -520,6 +610,7 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
   const mcpConnectBtn = document.getElementById('mcp-connect-btn') as HTMLButtonElement;
   const mcpFetchBtn = document.getElementById('mcp-fetch-btn') as HTMLButtonElement;
   const mcpRefreshBtn = document.getElementById('mcp-refresh-btn') as HTMLButtonElement;
+  const mcpMatchBtn = document.getElementById('mcp-match-btn') as HTMLButtonElement;
   const mcpSyncBtn = document.getElementById('mcp-sync-btn') as HTMLButtonElement;
   const mcpTokenInput = document.getElementById('mcp-token') as HTMLInputElement;
   const mcpFileKeyInput = document.getElementById('figma-file-key') as HTMLInputElement;
@@ -530,7 +621,10 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
     tolerance: { el: document.getElementById('section-tolerance'), key: 'toleranceRulesExpanded' },
     bridge: { el: document.getElementById('section-bridge'), key: 'bridgeSettingsExpanded' },
     figma: { el: document.getElementById('section-figma'), key: 'figmaConnectionExpanded' },
-    mappings: { el: document.getElementById('section-mappings'), key: 'variableMappingsExpanded' }
+    mappings: { el: document.getElementById('section-mappings'), key: 'variableMappingsExpanded' },
+    tokens: { el: document.getElementById('section-tokens'), key: 'designTokensExpanded' },
+    savedChecks: { el: document.getElementById('section-saved-checks'), key: 'savedChecksExpanded' },
+    privacy: { el: document.getElementById('section-privacy'), key: 'privacySettingsExpanded' }
   };
 
   Object.entries(sections).forEach(([_, config]) => {
@@ -547,22 +641,44 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
     figmaFetchPending = 2;
     mcpFetchBtn.disabled = true;
     mcpRefreshBtn.disabled = true;
+    mcpMatchBtn.disabled = true;
     mcpFetchBtn.textContent = forceRefresh ? 'Refreshing...' : 'Fetching...';
     mcpRefreshBtn.textContent = 'Working...';
+    mcpMatchBtn.textContent = 'Matching...';
   }
 
   function endFigmaFetch() {
     figmaFetchPending = 0;
     mcpFetchBtn.disabled = false;
     mcpRefreshBtn.disabled = false;
+    mcpMatchBtn.disabled = false;
     mcpFetchBtn.textContent = 'Fetch Spec';
     mcpRefreshBtn.textContent = 'Refresh Live';
+    mcpMatchBtn.textContent = 'Auto-Match';
   }
 
   function markFigmaFetchComplete() {
     figmaFetchPending = Math.max(0, figmaFetchPending - 1);
     if (figmaFetchPending === 0) {
       endFigmaFetch();
+    }
+  }
+
+  function handleComponentsMatched(components: any[]) {
+    if (!extractedData?.sourceName) return;
+
+    const targetName = extractedData.sourceName.toLowerCase().replace(/[-_ ]/g, '');
+    const match = components.find(c => {
+      const name = c.name.toLowerCase().replace(/[-_ ]/g, '');
+      return name === targetName || name.includes(targetName) || targetName.includes(name);
+    });
+
+    if (match) {
+      mcpNodeIdInput.value = match.node_id;
+      setSelectionStatus(`Matched component: ${match.name}`, 'success');
+      fetchFigmaNode(match.node_id);
+    } else {
+      setSelectionStatus(`No Figma component found matching "${extractedData.sourceName}"`, 'error');
     }
   }
 
@@ -612,11 +728,37 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
         if (chrome.storage) {
             chrome.storage.local.set({ figmaConfig: { token, fileKey } });
         }
+        renderFigmaTokenStatus(true);
     }
   });
 
   mcpSyncBtn.addEventListener('click', () => {
     sendMessage({ action: 'SYNC_FIGMA_TAB' });
+  });
+
+  mcpMatchBtn.addEventListener('click', () => {
+    if (!extractedData?.sourceName) {
+      setSelectionStatus('Pick an element with source metadata to use Auto-Match.', 'error');
+      return;
+    }
+    const fileKey = mcpFileKeyInput.value.trim();
+    if (!fileKey) {
+      alert('Please enter a Figma File Key first.');
+      return;
+    }
+
+    beginFigmaFetch(false);
+    // Overwrite pending count because we only expect 1 response for components 
+    // but the fetch logic might be reused if we find a match and then fetch the node.
+    // Actually, if we find a match, fetchFigmaNode will set it to 2.
+    // So for the components fetch itself, we just need 1.
+    figmaFetchPending = 1; 
+
+    sendMessage({ 
+      action: 'MCP_GET_COMPONENTS', 
+      fileKey, 
+      requestId: ++currentFigmaRequestId 
+    });
   });
 
   mcpFetchBtn.addEventListener('click', () => {
@@ -640,18 +782,28 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
       'figmaConnectionExpanded', 
       'variableMappingsExpanded', 
       'toleranceRulesExpanded', 
-      'bridgeSettingsExpanded'
+      'bridgeSettingsExpanded',
+      'designTokensExpanded',
+      'savedChecksExpanded',
+      'privacySettingsExpanded',
+      'debugLogging'
     ], (result) => {
       const config = result.figmaConfig || {};
 
       if (mcpTokenInput) mcpTokenInput.value = config.token || '';
       if (mcpFileKeyInput) mcpFileKeyInput.value = config.fileKey || '';
+      debugLogging = Boolean(result.debugLogging);
+      if (debugLoggingToggle) debugLoggingToggle.checked = debugLogging;
+      renderFigmaTokenStatus(Boolean(config.token));
 
       // Restore expanded states
       if (result.figmaConnectionExpanded) sections.figma.el?.classList.add('is-expanded');
       if (result.variableMappingsExpanded) sections.mappings.el?.classList.add('is-expanded');
       if (result.toleranceRulesExpanded) sections.tolerance.el?.classList.add('is-expanded');
       if (result.bridgeSettingsExpanded) sections.bridge.el?.classList.add('is-expanded');
+      if (result.designTokensExpanded) sections.tokens.el?.classList.add('is-expanded');
+      if (result.savedChecksExpanded) sections.savedChecks.el?.classList.add('is-expanded');
+      if (result.privacySettingsExpanded) sections.privacy.el?.classList.add('is-expanded');
 
       // Auto-connect if token exists
       if (config.token) {
@@ -693,6 +845,7 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
     setPickerState(false);
     setSelectionStatus('Selection ready.', 'success');
     extractedData = data;
+    lastFetchedProps = null;
     updateSelectionLayout();
 
     elementInfo.classList.remove('hidden');
@@ -705,6 +858,19 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
         fetchFigmaNode(data.figmaId);
     } else {
         guideToFigmaSpec();
+    }
+
+    if (data.sourceLoc) {
+      sendMessage({
+        action: 'BRIDGE_COMMAND',
+        payload: {
+          action: 'GET_PROPS',
+          sourceLoc: data.sourceLoc,
+          selector: data.element,
+          ancestors: data.ancestors,
+          sourceName: data.sourceName
+        }
+      });
     }
 
     // Display extracted styles
@@ -720,7 +886,7 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
     if (os) {
         os.classList.remove('hidden');
         // Auto-capture the element for visual overlay
-        console.log('[Panel] Auto-capturing element for visual overlay');
+        debugLog('[Panel] Auto-capturing element for visual overlay');
         sendMessage({ action: 'CAPTURE_ELEMENT', selector: data.element });
     }
   }
@@ -793,6 +959,35 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
 
     if (tokenClearBtn) tokenClearBtn.disabled = designTokens.length === 0;
   }
+
+  function renderFigmaTokenStatus(hasToken = Boolean(mcpTokenInput?.value?.trim())) {
+    if (!figmaTokenStatus) return;
+    figmaTokenStatus.textContent = hasToken
+      ? 'A Figma token is stored locally for API fetches.'
+      : 'No Figma token is stored.';
+    figmaTokenStatus.classList.toggle('success', hasToken);
+  }
+
+  debugLoggingToggle?.addEventListener('change', () => {
+    debugLogging = Boolean(debugLoggingToggle.checked);
+    chrome.storage?.local.set({ debugLogging });
+  });
+
+  figmaTokenClearBtn?.addEventListener('click', () => {
+    mcpTokenInput.value = '';
+    chrome.storage?.local.get(['figmaConfig'], (res) => {
+      const nextConfig = { ...(res.figmaConfig || {}) };
+      delete nextConfig.token;
+      chrome.storage.local.set({ figmaConfig: nextConfig }, () => {
+        renderFigmaTokenStatus(false);
+        const statusEl = document.getElementById('mcp-status') as HTMLElement;
+        if (statusEl) {
+          statusEl.textContent = 'Disconnected';
+          statusEl.className = 'status-badge';
+        }
+      });
+    });
+  });
 
   function saveDesignTokens(tokens: DesignToken[]) {
     designTokens = tokens;
@@ -914,7 +1109,8 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
     const report = {
       ...baseReport,
       results: enrichedResults,
-      tokenSummary: DesignTokenValidator.summarizeValidations(enrichedResults.map((result: any) => result.tokenValidation))
+      tokenSummary: DesignTokenValidator.summarizeValidations(enrichedResults.map((result: any) => result.tokenValidation)),
+      variantDiffs: compareVariants(parsed.componentProperties, lastFetchedProps)
     };
 
     lastDiffReport = {
@@ -924,6 +1120,45 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
     };
 
     renderResults(report);
+  }
+
+  function compareVariants(figmaProps?: Record<string, any>, codeProps?: any[]) {
+    if (!figmaProps) return [];
+    
+    const diffs: any[] = [];
+    const usedCodeProps = new Set<string>();
+
+    for (const [fName, fProp] of Object.entries(figmaProps)) {
+      // Heuristic mapping: find a code prop that matches the figma prop name (case-insensitive)
+      // Users can later override this with manual mappings.
+      const targetName = fName.toLowerCase();
+      const codeProp = codeProps?.find(p => p.name.toLowerCase() === targetName);
+
+      if (codeProp) {
+        usedCodeProps.add(codeProp.name);
+        const fValue = String(fProp.value);
+        const cValue = String(codeProp.value);
+        const match = fValue.toLowerCase() === cValue.toLowerCase();
+
+        diffs.push({
+          figmaProp: fName,
+          figmaValue: fProp.value,
+          reactProp: codeProp.name,
+          reactValue: codeProp.value,
+          status: match ? 'match' : 'mismatch'
+        });
+      } else {
+        diffs.push({
+          figmaProp: fName,
+          figmaValue: fProp.value,
+          reactProp: null,
+          reactValue: null,
+          status: 'unmapped'
+        });
+      }
+    }
+
+    return diffs;
   }
 
   compareBtn.addEventListener('click', () => runComparison());
@@ -1018,7 +1253,7 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
     parent.appendChild(stat);
   }
 
-  function renderResults(report: DiffReport) {
+  function renderResults(report: any) {
     resultsSection.classList.remove('hidden');
 
     // Summary
@@ -1027,13 +1262,59 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
     appendStat(resultsSummary, 'Matched', s.matched, 'stat-matched');
     appendStat(resultsSummary, 'Mismatched', s.mismatched, 'stat-mismatched');
     appendStat(resultsSummary, 'Missing', s.missing, 'stat-missing');
-    const tokenSummary = (report as any).tokenSummary;
+    const tokenSummary = report.tokenSummary;
     if (tokenSummary?.total > 0) {
       appendStat(resultsSummary, 'Tokenized', `${tokenSummary.tokenized}/${tokenSummary.total}`, 'stat-tokenized');
     }
 
     // Build result list
     resultsList.textContent = '';
+
+    // Render Variant Diffs
+    if (report.variantDiffs && report.variantDiffs.length > 0) {
+      const variantGroup = document.createElement('div');
+      variantGroup.className = 'result-group';
+      
+      const header = document.createElement('div');
+      header.className = 'result-group-header';
+      header.textContent = 'Variants & Props';
+      variantGroup.appendChild(header);
+
+      report.variantDiffs.forEach((vd: any) => {
+        const row = document.createElement('div');
+        row.className = 'variant-row';
+
+        const name = document.createElement('div');
+        name.className = 'variant-prop-name';
+        name.textContent = vd.figmaProp;
+        
+        const designValue = document.createElement('div');
+        designValue.className = 'variant-value';
+        designValue.textContent = vd.figmaValue;
+        designValue.title = 'Value in Figma';
+
+        const codeValue = document.createElement('div');
+        codeValue.className = 'variant-value';
+        codeValue.textContent = vd.reactProp ? vd.reactValue : '—';
+        codeValue.title = vd.reactProp ? `Value in Code (${vd.reactProp})` : 'Not found in Code';
+        codeValue.style.opacity = vd.reactProp ? '1' : '0.4';
+
+        const status = document.createElement('div');
+        status.className = 'variant-status';
+        const badge = document.createElement('span');
+        badge.className = `badge-variant ${vd.status}`;
+        badge.textContent = vd.status;
+        status.appendChild(badge);
+
+        row.appendChild(name);
+        row.appendChild(designValue);
+        row.appendChild(codeValue);
+        row.appendChild(status);
+        variantGroup.appendChild(row);
+      });
+
+      resultsList.appendChild(variantGroup);
+    }
 
     // Sort: mismatches first (major > minor), then missing, then matches
     const severityOrder: Record<string, number> = { major: 0, minor: 1, negligible: 2 };
@@ -1261,6 +1542,35 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
           }, 9876);
         });
         actions.appendChild(bridgeBtn);
+
+        const applyBtn = document.createElement('button');
+        applyBtn.className = 'btn btn-xs bridge-btn';
+        applyBtn.textContent = 'Apply';
+        applyBtn.title = 'Apply this declaration through the VS Code bridge when a safe edit is found';
+        applyBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const declaration = r.sourceDeclaration || `${r.property}: ${r.sourceExpected ?? r.expected};`;
+          applyBtn.classList.add('loading');
+          applyBtn.textContent = 'Applying';
+          sendMessage({
+            action: 'BRIDGE_COMMAND',
+            payload: {
+              action: 'APPLY_FIX',
+              selector: lastDiffReport.element,
+              ancestors: extractedData?.ancestors ?? [],
+              sourceLoc: extractedData?.sourceLoc ?? null,
+              sourceName: extractedData?.sourceName ?? null,
+              property: r.property,
+              value: r.sourceExpected ?? r.expected,
+              declaration
+            }
+          });
+          setTimeout(() => {
+            applyBtn.classList.remove('loading');
+            applyBtn.textContent = 'Apply';
+          }, 2000);
+        });
+        actions.appendChild(applyBtn);
         actualCol.appendChild(actions);
       }
     } else {
@@ -1534,6 +1844,195 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
   // Load mappings list on startup
   refreshMappingsList();
 
+  // --- Saved checks / DOM-to-Figma mappings ---
+  function getSavedChecks(cb: (checks: SavedCheck[]) => void) {
+    chrome.storage.local.get(['savedChecks'], (result) => {
+      cb(Array.isArray(result.savedChecks) ? result.savedChecks : []);
+    });
+  }
+
+  function setSavedChecks(checks: SavedCheck[], cb?: () => void) {
+    chrome.storage.local.set({ savedChecks: checks }, cb);
+  }
+
+  function updateSavedCheckStatus(checks?: SavedCheck[]) {
+    if (!savedCheckStatus) return;
+    if (!checks || checks.length === 0) {
+      savedCheckStatus.textContent = 'No saved checks yet.';
+      return;
+    }
+    savedCheckStatus.textContent = `${checks.length} saved check${checks.length === 1 ? '' : 's'} ready.`;
+  }
+
+  function refreshSavedChecksList() {
+    getSavedChecks((checks) => {
+      savedCheckList.textContent = '';
+      updateSavedCheckStatus(checks);
+      savedCheckRunBtn.disabled = checks.length === 0;
+
+      for (const check of checks) {
+        const row = document.createElement('div');
+        row.className = 'saved-check-row';
+
+        const meta = document.createElement('div');
+        meta.className = 'saved-check-meta';
+        const title = document.createElement('div');
+        title.className = 'saved-check-title';
+        title.textContent = check.name;
+        const detail = document.createElement('div');
+        detail.className = 'saved-check-detail';
+        detail.textContent = `${check.selector} -> ${check.figmaNodeId}`;
+        meta.appendChild(title);
+        meta.appendChild(detail);
+        row.appendChild(meta);
+
+        const actions = document.createElement('div');
+        actions.className = 'saved-check-actions';
+        const runBtn = document.createElement('button');
+        runBtn.className = 'btn btn-xs';
+        runBtn.textContent = 'Run';
+        runBtn.addEventListener('click', () => runSavedChecks([check]));
+        const loadBtn = document.createElement('button');
+        loadBtn.className = 'btn btn-xs';
+        loadBtn.textContent = 'Load';
+        loadBtn.addEventListener('click', () => {
+          selectorInput.value = check.selector;
+          mcpFileKeyInput.value = check.figmaFileKey;
+          mcpNodeIdInput.value = check.figmaNodeId;
+          varOverrides = { ...(check.varOverrides || {}) };
+          queryBySelector();
+        });
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn btn-xs';
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.addEventListener('click', () => {
+          getSavedChecks((items) => setSavedChecks(items.filter((item) => item.id !== check.id), refreshSavedChecksList));
+        });
+        actions.appendChild(runBtn);
+        actions.appendChild(loadBtn);
+        actions.appendChild(deleteBtn);
+        row.appendChild(actions);
+        savedCheckList.appendChild(row);
+      }
+    });
+  }
+
+  function buildDiffForData(data: any, figmaPayload: any, tolerance: ReturnType<typeof getTolerance>, overrides: Record<string, string> = {}) {
+    const parsed = FigmaParser.parse(figmaPayload);
+    const rootFontSize = data.rootFontSize || 16;
+    const figmaStyles = { ...parsed.styles };
+    const rawFigmaStyles = { ...parsed.rawStyles };
+    const sourceDeclarations = { ...parsed.sourceDeclarations };
+
+    for (const [prop, val] of Object.entries(overrides)) {
+      if (prop in figmaStyles) {
+        figmaStyles[prop] = val;
+        rawFigmaStyles[prop] = val;
+        sourceDeclarations[prop] = `${prop}: ${val};`;
+      }
+    }
+
+    const normalizedFigma = Normalizer.normalize(figmaStyles, rootFontSize);
+    const normalizedBrowser = Normalizer.normalize(data.styles, rootFontSize);
+    const baseReport = DiffEngine.compare(normalizedFigma, normalizedBrowser, tolerance);
+    return {
+      ...baseReport,
+      results: baseReport.results.map((result: any) => ({
+        ...result,
+        sourceExpected: rawFigmaStyles[result.property] ?? result.expected,
+        sourceDeclaration: sourceDeclarations[result.property] || `${result.property}: ${rawFigmaStyles[result.property] ?? result.expected};`
+      }))
+    };
+  }
+
+  savedCheckSaveBtn?.addEventListener('click', () => {
+    if (!extractedData) {
+      setSelectionStatus('Pick a live element before saving a check.', 'error');
+      return;
+    }
+    const figmaFileKey = mcpFileKeyInput.value.trim();
+    const figmaNodeId = mcpNodeIdInput.value.trim();
+    if (!figmaFileKey || !figmaNodeId) {
+      guideToFigmaSpec('Add a Figma file key and node ID before saving this check.');
+      return;
+    }
+
+    const fallbackName = extractedData.sourceName || extractedData.element || figmaNodeId;
+    const name = savedCheckNameInput.value.trim() || fallbackName;
+    const entry: SavedCheck = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      name,
+      selector: extractedData.element,
+      figmaFileKey,
+      figmaNodeId,
+      tolerance: getTolerance(),
+      varOverrides: { ...varOverrides },
+      createdAt: new Date().toISOString()
+    };
+
+    getSavedChecks((checks) => {
+      const duplicateIndex = checks.findIndex((check) => check.selector === entry.selector && check.figmaNodeId === entry.figmaNodeId);
+      if (duplicateIndex >= 0) {
+        checks[duplicateIndex] = { ...entry, id: checks[duplicateIndex].id };
+      } else {
+        checks.push(entry);
+      }
+      setSavedChecks(checks, () => {
+        savedCheckNameInput.value = '';
+        refreshSavedChecksList();
+        setSelectionStatus(`Saved check "${name}".`, 'success');
+      });
+    });
+  });
+
+  savedCheckRunBtn?.addEventListener('click', () => {
+    getSavedChecks((checks) => runSavedChecks(checks));
+  });
+
+  async function runSavedChecks(checks: SavedCheck[]) {
+    if (checks.length === 0) return;
+    batchResultsSection.classList.remove('hidden');
+    batchResultsList.textContent = '';
+    savedCheckRunBtn.disabled = true;
+    savedCheckRunBtn.textContent = 'Running...';
+
+    for (const check of checks) {
+      const row = document.createElement('div');
+      row.className = 'batch-result-row';
+      const meta = document.createElement('div');
+      meta.className = 'batch-result-meta';
+      const title = document.createElement('div');
+      title.className = 'batch-result-title';
+      title.textContent = check.name;
+      const detail = document.createElement('div');
+      detail.className = 'batch-result-detail';
+      detail.textContent = 'Running...';
+      meta.appendChild(title);
+      meta.appendChild(detail);
+      row.appendChild(meta);
+      batchResultsList.appendChild(row);
+
+      try {
+        const data = await requestSelectorExtraction(check.selector);
+        const figmaPayload = await requestFigmaNode(check.figmaFileKey, check.figmaNodeId);
+        const report = buildDiffForData(data, figmaPayload, check.tolerance || getTolerance(), check.varOverrides || {});
+        const failing = report.summary.mismatched + report.summary.missing;
+        row.classList.add(failing === 0 ? 'passed' : 'failed');
+        detail.textContent = failing === 0
+          ? `${report.summary.matched}/${report.summary.total} matched`
+          : `${report.summary.mismatched} mismatched, ${report.summary.missing} missing`;
+      } catch (err: any) {
+        row.classList.add('errored');
+        detail.textContent = err?.message || 'Check failed.';
+      }
+    }
+
+    savedCheckRunBtn.disabled = false;
+    savedCheckRunBtn.textContent = 'Run All';
+  }
+
+  refreshSavedChecksList();
+
   // =====================================================
   // Phase 2 — Visual Overlay Comparison
   // =====================================================
@@ -1547,6 +2046,12 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
   const diffThresholdRow = document.getElementById('diff-threshold-row') as HTMLElement;
   const diffThreshold = document.getElementById('diff-threshold') as HTMLInputElement;
   const diffThresholdVal = document.getElementById('diff-threshold-val') as HTMLElement;
+  const overlayAlignRow = document.getElementById('overlay-align-row') as HTMLElement;
+  const overlayOffsetX = document.getElementById('overlay-offset-x') as HTMLInputElement;
+  const overlayOffsetY = document.getElementById('overlay-offset-y') as HTMLInputElement;
+  const overlayScale = document.getElementById('overlay-scale') as HTMLInputElement;
+  const overlayAlignAutoBtn = document.getElementById('overlay-align-auto-btn') as HTMLButtonElement;
+  const overlayAlignResetBtn = document.getElementById('overlay-align-reset-btn') as HTMLButtonElement;
   const overlayCanvasArea = document.getElementById('overlay-canvas-area') as HTMLElement;
   const overlayCanvas = document.getElementById('overlay-canvas') as HTMLCanvasElement;
   const overlayMatchInfo = document.getElementById('overlay-match-info') as HTMLElement;
@@ -1675,6 +2180,7 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
   function updateSliderVisibility() {
     overlaySliderRow.classList.toggle('hidden', overlayMode !== 'onion');
     diffThresholdRow.classList.toggle('hidden', overlayMode !== 'diff');
+    overlayAlignRow.classList.toggle('hidden', !figmaImage);
   }
 
   // --- Opacity slider ---
@@ -1689,14 +2195,61 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
     renderOverlay();
   });
 
+  [overlayOffsetX, overlayOffsetY, overlayScale].forEach((input) => {
+    input?.addEventListener('input', () => renderOverlay());
+  });
+
+  overlayAlignResetBtn.addEventListener('click', () => {
+    overlayOffsetX.value = '0';
+    overlayOffsetY.value = '0';
+    overlayScale.value = '100';
+    renderOverlay();
+  });
+
+  overlayAlignAutoBtn.addEventListener('click', async () => {
+    if (!browserScreenshot || !figmaImage) return;
+
+    overlayAlignAutoBtn.disabled = true;
+    overlayAlignAutoBtn.textContent = 'Aligning...';
+
+    try {
+      // Use the current canvas dimensions for comparison
+      const width = overlayCanvas.width;
+      const height = overlayCanvas.height;
+
+      // Load both images into ImageData
+      const imgA = await PixelDiff.loadImageData(browserScreenshot, width, height);
+      const imgB = await PixelDiff.loadImageData(figmaImage, width, height);
+
+      // Find best alignment within ±10px
+      const result = PixelDiff.findBestAlignment(imgA, imgB, 10);
+
+      // Apply the results
+      overlayOffsetX.value = String(result.x);
+      overlayOffsetY.value = String(result.y);
+
+      renderOverlay();
+
+      overlayAlignAutoBtn.textContent = 'Aligned!';
+      setTimeout(() => { overlayAlignAutoBtn.textContent = 'Auto-Align'; overlayAlignAutoBtn.disabled = false; }, 1500);
+    } catch (err) {
+      console.error('[Panel] Auto-align failed:', err);
+      overlayAlignAutoBtn.textContent = 'Failed';
+      setTimeout(() => { overlayAlignAutoBtn.textContent = 'Auto-Align'; overlayAlignAutoBtn.disabled = false; }, 1500);
+    }
+  });
+
+
   // --- Render overlay ---
   async function renderOverlay() {
     if (!browserScreenshot && !figmaImage) {
       overlayCanvasArea.classList.add('hidden');
+      overlayAlignRow.classList.add('hidden');
       return;
     }
 
     overlayCanvasArea.classList.remove('hidden');
+    overlayAlignRow.classList.toggle('hidden', !figmaImage);
     overlayMatchInfo.classList.add('hidden');
 
     const ctx = overlayCanvas.getContext('2d')!;
@@ -1734,7 +2287,7 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
       if (figmaImg) {
         const opacity = parseInt(overlayOpacity.value) / 100;
         ctx.globalAlpha = opacity;
-        ctx.drawImage(figmaImg, 0, 0, w, h);
+        drawAlignedFigma(ctx, figmaImg, w, h);
         ctx.globalAlpha = 1;
       }
     } else if (overlayMode === 'diff') {
@@ -1745,7 +2298,7 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
       if (browserImg && figmaImg) {
         const threshold = parseInt(diffThreshold.value) || 10;
         const imgDataA = getImageData(browserImg, w, h);
-        const imgDataB = getImageData(figmaImg, w, h);
+        const imgDataB = getAlignedImageData(figmaImg, w, h);
         const result = PixelDiff.compare(imgDataA, imgDataB, { threshold });
 
         ctx.putImageData(result.diffImageData, 0, 0);
@@ -1786,11 +2339,41 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
     return ctx.getImageData(0, 0, w, h);
   }
 
+  function getOverlayTransform(targetWidth: number, targetHeight: number) {
+    const x = Number(overlayOffsetX.value) || 0;
+    const y = Number(overlayOffsetY.value) || 0;
+    const scale = Math.max(0.25, (Number(overlayScale.value) || 100) / 100);
+    return {
+      x,
+      y,
+      width: targetWidth * scale,
+      height: targetHeight * scale
+    };
+  }
+
+  function drawAlignedFigma(ctx: CanvasRenderingContext2D, img: HTMLImageElement, w: number, h: number) {
+    const transform = getOverlayTransform(w, h);
+    ctx.drawImage(img, transform.x, transform.y, transform.width, transform.height);
+  }
+
+  function getAlignedImageData(img: HTMLImageElement, w: number, h: number) {
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext('2d')!;
+    drawAlignedFigma(ctx, img, w, h);
+    return ctx.getImageData(0, 0, w, h);
+  }
+
   // --- Reset overlay state on clear ---
   clearBtn.addEventListener('click', () => {
     browserScreenshot = null;
     figmaImage = null;
+    overlayOffsetX.value = '0';
+    overlayOffsetY.value = '0';
+    overlayScale.value = '100';
     overlayCanvasArea.classList.add('hidden');
+    overlayAlignRow.classList.add('hidden');
     overlayMatchInfo.classList.add('hidden');
     // Reset drop zone
     figmaDropZone.classList.remove('has-image');

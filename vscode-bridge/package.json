@@ -23,7 +23,7 @@
   "main": "./dist/extension.js",
   "scripts": {
     "package": "vsce package",
-    "test": "tsx test-search.ts && tsx test-file-enumerator.ts && tsx test-source-loc.ts && tsx test-runtime-setup.ts",
+    "test": "tsx test-search.ts && tsx test-search-extended.ts && tsx test-file-enumerator.ts && tsx test-source-loc.ts && tsx test-runtime-setup.ts && tsx test-apply-fix.ts && tsx test-jsx-parser.ts && tsx test-jsx-logic.ts",
     "test:coverage": "c8 npm test",
     "release": "semantic-release"
   },

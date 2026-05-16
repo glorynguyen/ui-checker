@@ -1,0 +1,39 @@
+name: UI Checker
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  ui-checker:
+    runs-on: ubuntu-latest
+    env:
+      FIGMA_TOKEN: ${{ secrets.FIGMA_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build:cli
+
+      - name: Run UI checks
+        run: |
+          node dist/ui-checker-ci.js \
+            --config ui-checker.config.json \
+            --json ui-checker-report.json \
+            --markdown ui-checker-report.md \
+            --html ui-checker-report.html
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-checker-report
+          path: |
+            ui-checker-report.json
+            ui-checker-report.md
+            ui-checker-report.html

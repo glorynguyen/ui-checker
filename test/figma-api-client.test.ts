@@ -177,6 +177,34 @@ test('FigmaAPIClient falls back to the first returned node key', async () => {
   }
 });
 
+test('FigmaAPIClient fetches component lists from a file', async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (input) => {
+    assert.equal(input.toString(), 'https://api.figma.com/v1/files/file_key/components');
+    return jsonResponse({
+      meta: {
+        components: [
+          { node_id: '1:1', name: 'Button' },
+          { node_id: '1:2', name: 'Header' }
+        ]
+      }
+    });
+  };
+
+  try {
+    const client = new FigmaAPIClient('figd_test_token');
+    const components = await client.getComponents('file_key');
+
+    assert.deepEqual(components, [
+      { node_id: '1:1', name: 'Button' },
+      { node_id: '1:2', name: 'Header' }
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('FigmaAPIClient reports missing node documents', async () => {
   const originalFetch = globalThis.fetch;
 

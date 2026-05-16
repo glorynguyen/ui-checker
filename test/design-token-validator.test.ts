@@ -36,6 +36,34 @@ test('DesignTokenValidator parses nested W3C-style token JSON', () => {
   assert.equal(tokens[1].normalizedValue, '8px');
 });
 
+test('DesignTokenValidator walks mixed token objects and skips metadata-like nodes', () => {
+  const tokens = DesignTokenValidator.parse({
+    $schema: 'https://tokens.example/schema.json',
+    color: {
+      primary: '#112233',
+      ignoredArray: ['#000000'],
+      ignoredNull: null
+    },
+    typography: {
+      family: {
+        type: 'fontFamily',
+        value: 'Inter'
+      }
+    },
+    motion: {
+      easing: {
+        value: 'ease-out'
+      }
+    }
+  });
+
+  assert.equal(tokens.find((token) => token.path === 'color.primary')?.normalizedValue, 'rgb(17, 34, 51)');
+  assert.equal(tokens.find((token) => token.path === 'typography.family')?.type, 'font-family');
+  assert.equal(tokens.find((token) => token.path === 'motion.easing')?.type, 'unknown');
+  assert.equal(tokens.some((token) => token.path.includes('$schema')), false);
+  assert.equal(tokens.some((token) => token.path.includes('ignoredArray')), false);
+});
+
 test('DesignTokenValidator flags hardcoded values that match imported tokens', () => {
   const tokens = DesignTokenValidator.parse({
     color: {

@@ -68,6 +68,63 @@ export const PixelDiff = {
   },
 
   /**
+   * Find the best X/Y offset to align imgB to imgA within a given range.
+   * This is used for "Smart Shift Detection" to account for small viewport mismatches.
+   * 
+   * @param {ImageData} imgA - Reference image (browser)
+   * @param {ImageData} imgB - Image to align (Figma)
+   * @param {number} range - Search range in pixels (e.g. 10 for ±10px)
+   * @returns {{x: number, y: number, matchPercent: number}}
+   */
+  findBestAlignment(imgA: ImageData, imgB: ImageData, range: number = 10): { x: number, y: number, matchPercent: number } {
+    let bestX = 0;
+    let bestY = 0;
+    let bestMatch = -1;
+
+    const threshold = 10;
+    const width = imgA.width;
+    const height = imgA.height;
+    const a = imgA.data;
+    const b = imgB.data;
+
+    // We only need to sample a subset of pixels for speed during the search
+    // Using a stride of 2 (every 2nd pixel) reduces the workload by 4x
+    const stride = 2;
+
+    for (let dy = -range; dy <= range; dy++) {
+      for (let dx = -range; dx <= range; dx++) {
+        let matchCount = 0;
+        let totalSampled = 0;
+
+        for (let y = range; y < height - range; y += stride) {
+          for (let x = range; x < width - range; x += stride) {
+            const idxA = (y * width + x) * 4;
+            const idxB = ((y + dy) * width + (x + dx)) * 4;
+
+            const dr = Math.abs(a[idxA] - b[idxB]);
+            const dg = Math.abs(a[idxA + 1] - b[idxB + 1]);
+            const db = Math.abs(a[idxA + 2] - b[idxB + 2]);
+
+            if (dr <= threshold && dg <= threshold && db <= threshold) {
+              matchCount++;
+            }
+            totalSampled++;
+          }
+        }
+
+        const matchPercent = (matchCount / totalSampled) * 100;
+        if (matchPercent > bestMatch) {
+          bestMatch = matchPercent;
+          bestX = dx;
+          bestY = dy;
+        }
+      }
+    }
+
+    return { x: bestX, y: bestY, matchPercent: bestMatch };
+  },
+
+  /**
    * Load an image (URL or data URL) into ImageData at the given dimensions.
    * @param {string} src - Image source
    * @param {number} width - Target width

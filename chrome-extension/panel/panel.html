@@ -144,6 +144,7 @@
               <button id="mcp-connect-btn" class="btn btn-primary">Connect</button>
               <div class="action-cluster">
                 <button id="mcp-sync-btn" class="btn" title="Sync from open Figma tab">Sync Tab</button>
+                <button id="mcp-match-btn" class="btn" title="Automatically find Figma node by component name">Auto-Match</button>
                 <button id="mcp-fetch-btn" class="btn">Fetch Spec</button>
                 <button id="mcp-refresh-btn" class="btn" title="Bypass cache and refetch from Figma">Refresh Live</button>
               </div>
@@ -213,6 +214,58 @@
               <div id="token-status" class="config-meta">No token file loaded</div>
               <div class="config-hint">
                 Supports flat JSON and W3C-style tokens using <b>$value</b> or <b>value</b>.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="section-saved-checks" class="settings-card settings-card-wide collapsible-section">
+          <div class="settings-card-header">
+            <div class="header-main">
+              <div class="title-wrap">
+                <span class="caret">▶</span>
+                <div class="section-title">Saved Checks</div>
+              </div>
+              <p class="section-description">Link DOM selectors to Figma nodes and rerun them as a reusable page checklist.</p>
+            </div>
+          </div>
+
+          <div class="collapsible-content">
+            <div class="mapping-stack">
+              <div class="mapping-controls">
+                <input type="text" id="saved-check-name" class="input-field saved-check-name" placeholder="Check name">
+                <button id="saved-check-save-btn" class="btn">Save Current</button>
+                <button id="saved-check-run-btn" class="btn btn-primary">Run All</button>
+              </div>
+              <div id="saved-check-list" class="saved-check-list"></div>
+              <div id="saved-check-status" class="config-meta">No saved checks yet.</div>
+            </div>
+          </div>
+        </section>
+
+        <section id="section-privacy" class="settings-card settings-card-wide collapsible-section">
+          <div class="settings-card-header">
+            <div class="header-main">
+              <div class="title-wrap">
+                <span class="caret">▶</span>
+                <div class="section-title">Privacy & Debugging</div>
+              </div>
+              <p class="section-description">Keep sensitive design data quiet unless you are actively debugging the extension.</p>
+            </div>
+          </div>
+
+          <div class="collapsible-content">
+            <div class="setting-list">
+              <label class="setting-row">
+                <span>Debug logging</span>
+                <input type="checkbox" id="debug-logging-toggle">
+              </label>
+              <div class="setting-row setting-row-action">
+                <div>
+                  <span>Figma token</span>
+                  <p id="figma-token-status" class="setting-help">Stored locally when connected.</p>
+                </div>
+                <button id="figma-token-clear-btn" class="btn btn-sm" type="button">Clear Token</button>
               </div>
             </div>
           </div>
@@ -385,12 +438,34 @@
         <span id="diff-threshold-val">10</span>
       </div>
 
+      <div id="overlay-align-row" class="overlay-align-row hidden">
+        <label class="field-stack">
+          <span class="field-label">X Offset</span>
+          <input type="number" id="overlay-offset-x" class="input-field" value="0" step="1">
+        </label>
+        <label class="field-stack">
+          <span class="field-label">Y Offset</span>
+          <input type="number" id="overlay-offset-y" class="input-field" value="0" step="1">
+        </label>
+        <label class="field-stack">
+          <span class="field-label">Scale</span>
+          <input type="number" id="overlay-scale" class="input-field" value="100" min="25" max="300" step="1">
+        </label>
+        <button id="overlay-align-auto-btn" class="btn btn-sm btn-primary" title="Smart Shift Detection: Automatically find the best alignment (±10px)">Auto-Align</button>
+        <button id="overlay-align-reset-btn" class="btn btn-sm">Reset</button>
+      </div>
+
       <div id="overlay-canvas-area" class="overlay-canvas-area hidden">
         <div id="overlay-canvases" class="overlay-canvases">
           <canvas id="overlay-canvas" class="overlay-canvas"></canvas>
         </div>
         <div id="overlay-match-info" class="overlay-match-info hidden"></div>
       </div>
+    </div>
+
+    <div id="batch-results-section" class="batch-results-section hidden">
+      <div class="section-title">Saved Check Results</div>
+      <div id="batch-results-list" class="batch-results-list"></div>
     </div>
 
     <!-- Results -->

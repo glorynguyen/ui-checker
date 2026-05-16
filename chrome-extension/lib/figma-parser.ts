@@ -6,6 +6,8 @@ export interface ParsedStyles {
   varMap: Record<string, { varName: string; fallback: string | null; original: string }>;
   rawStyles: Record<string, string>;
   sourceDeclarations: Record<string, string>;
+  componentProperties?: Record<string, { type: string; value: string | boolean }>;
+  componentName?: string;
 }
 
 export interface MultiParsedStyles extends ParsedStyles {
@@ -93,7 +95,27 @@ export const FigmaParser = {
     if (doc.paddingLeft !== undefined) setStyle('padding-left', `${doc.paddingLeft}px`);
     if (doc.itemSpacing !== undefined) setStyle('gap', `${doc.itemSpacing}px`);
 
-    return { styles, varMap, rawStyles, sourceDeclarations };
+    // 6. Component Properties (Variants)
+    const componentProperties: Record<string, { type: string; value: string | boolean }> = {};
+    if (doc.componentProperties) {
+      for (const [key, prop] of Object.entries(doc.componentProperties) as [string, any][]) {
+        // Keys are often in "Name#ID" format; we strip the ID for readability
+        const cleanKey = key.split('#')[0];
+        componentProperties[cleanKey] = {
+          type: prop.type,
+          value: prop.value
+        };
+      }
+    }
+
+    return {
+      styles,
+      varMap,
+      rawStyles,
+      sourceDeclarations,
+      componentProperties: Object.keys(componentProperties).length > 0 ? componentProperties : undefined,
+      componentName: doc.name
+    };
   },
 
   _getPrimarySolidFill(fills: any[]) {

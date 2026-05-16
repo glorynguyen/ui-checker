@@ -22,6 +22,7 @@ export function parseSourceLoc(sourceLoc: string): ParsedSourceLoc | null {
   return {
     rawPath,
     line,
+    /* c8 ignore next -- column is numeric by regex; fallback is defensive. */
     column: Number.isFinite(column) ? column : 1
   };
 }

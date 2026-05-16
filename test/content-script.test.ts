@@ -172,6 +172,53 @@ test('content script reports selector misses and returns rect data for selected 
   assert.equal(response.devicePixelRatio, 2);
 });
 
+test('content script returns extracted data for batch selector requests without changing selection', () => {
+  const badge = createMockElement({
+    tagName: 'SPAN',
+    classNames: ['badge'],
+    dataset: { figmaId: '9:9' },
+    rect: { left: 2, top: 4, width: 80, height: 24 },
+    computedStyles: {
+      color: 'rgb(10, 20, 30)',
+      'font-weight': '600'
+    }
+  });
+
+  const harness = loadContentScriptHarness({
+    selectorMap: {
+      '.badge': badge
+    },
+    rootFontSize: '18px'
+  });
+
+  let response: any = null;
+  const keepAlive = harness.listener(
+    { action: 'EXTRACT_SELECTOR', selector: '.badge' },
+    null,
+    (payload: any) => {
+      response = payload;
+    }
+  );
+
+  assert.equal(keepAlive, true);
+  assert.equal(harness.sentMessages.length, 0);
+  assert.equal(response.data.element, 'span.badge');
+  assert.equal(response.data.figmaId, '9:9');
+  assert.equal(response.data.rootFontSize, 18);
+  assert.equal(response.data.styles.color, 'rgb(10, 20, 30)');
+
+  let missingResponse: any = null;
+  harness.listener(
+    { action: 'EXTRACT_SELECTOR', selector: '.missing' },
+    null,
+    (payload: any) => {
+      missingResponse = payload;
+    }
+  );
+
+  assert.match(missingResponse.error, /No match found/);
+});
+
 test('content script picker handlers react to mouse, click, and escape events', () => {
   const card = createMockElement({
     tagName: 'SECTION',

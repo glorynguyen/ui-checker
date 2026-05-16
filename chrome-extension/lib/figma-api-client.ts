@@ -37,6 +37,12 @@ export class FigmaAPIClient {
     return node.document;
   }
 
+  /** Fetch the list of components in a Figma file. */
+  async getComponents(fileKey: string) {
+    const data = await this._request(`/files/${fileKey}/components`);
+    return data.meta?.components || [];
+  }
+
   /** Get a rendered image URL for a node. */
   async getImage(nodeId: string, fileKey: string) {
     const encodedId = encodeURIComponent(nodeId);
