@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/glorynguyen/ui-checker/compare/vscode-bridge-v1.2.0...vscode-bridge-v1.3.0) (2026-05-16)
+
+
+### Features
+
+* **extension:** add automated matching, saved checks, and smart shift detection ([8d33b60](https://github.com/glorynguyen/ui-checker/commit/8d33b602ba97f64f0efbc8434ea6a82967a36da3))
+
 # [1.2.0](https://github.com/glorynguyen/ui-checker/compare/vscode-bridge-v1.1.0...vscode-bridge-v1.2.0) (2026-05-15)
 
 
