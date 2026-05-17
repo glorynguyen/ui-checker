@@ -5,6 +5,7 @@ import { Normalizer } from '../lib/normalizer';
 import { DiffEngine, DiffReport, DiffResult } from '../lib/diff-engine';
 import { PixelDiff } from '../lib/pixel-diff';
 import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator';
+import { TailwindMapper, TailwindMode, TailwindThemeConfig } from '../lib/tailwind-mapper';
 
 (function () {
   // --- DOM refs ---
@@ -46,8 +47,14 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
   const tokenImportInput = document.getElementById('token-import-input') as HTMLInputElement;
   const tokenClearBtn = document.getElementById('token-clear-btn') as HTMLButtonElement;
   const tokenStatus = document.getElementById('token-status') as HTMLElement;
+  const tailwindModeSelect = document.getElementById('tailwind-mode-select') as HTMLSelectElement;
+  const tailwindRefreshBtn = document.getElementById('tailwind-refresh-btn') as HTMLButtonElement;
+  const tailwindStatus = document.getElementById('tailwind-status') as HTMLElement;
   const runtimeSetupBtn = document.getElementById('runtime-setup-btn') as HTMLButtonElement;
   const runtimeSetupStatus = document.getElementById('runtime-setup-status') as HTMLElement;
+  const runtimeAccuracyCallout = document.getElementById('runtime-accuracy-callout') as HTMLElement;
+  const runtimeAccuracySetupBtn = document.getElementById('runtime-accuracy-setup-btn') as HTMLButtonElement;
+  const runtimeAccuracyStatus = document.getElementById('runtime-accuracy-status') as HTMLElement;
   const savedCheckNameInput = document.getElementById('saved-check-name') as HTMLInputElement;
   const savedCheckSaveBtn = document.getElementById('saved-check-save-btn') as HTMLButtonElement;
   const savedCheckRunBtn = document.getElementById('saved-check-run-btn') as HTMLButtonElement;
@@ -69,6 +76,9 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
   let figmaFetchPending = 0;
   let figmaSpecHighlightTimer: number | null = null;
   let designTokens: DesignToken[] = [];
+  let tailwindMode: TailwindMode = 'off';
+  let tailwindTheme: TailwindThemeConfig | null = null;
+  let tailwindConfigFile: string | null = null;
   let debugLogging = false;
   let lastFetchedProps: any[] | null = null;
   let lastFigmaProperties: Record<string, any> | null = null;
@@ -94,6 +104,9 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
   let nextBatchRequestId = 1;
 
   const headerLocateBtn = document.getElementById('header-locate-btn') as HTMLButtonElement;
+  const DEFAULT_RUNTIME_ACCURACY_MESSAGE = 'Locate in Code will use workspace search. Install the dev runtime for exact file and line jumps.';
+  let runtimeSetupState: 'idle' | 'loading' | 'success' | 'error' = 'idle';
+  let runtimeSetupWatchdog: number | null = null;
 
   function debugLog(...args: unknown[]) {
     if (debugLogging) {
@@ -102,15 +115,32 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
   }
 
   function logRuntimeSetup(event: string, details?: Record<string, unknown>) {
+    const prefix = '[Panel][RuntimeSetup]';
     if (details) {
-      debugLog(`[Panel][RuntimeSetup] ${event}`, details);
+      console.log(`${prefix} ${event}`, details);
     } else {
-      debugLog(`[Panel][RuntimeSetup] ${event}`);
+      console.log(`${prefix} ${event}`);
     }
   }
 
   function setRuntimeSetupState(state: 'idle' | 'loading' | 'success' | 'error', message: string) {
+    runtimeSetupState = state;
     logRuntimeSetup('state changed', { state, message });
+
+    if (runtimeSetupWatchdog) {
+      clearTimeout(runtimeSetupWatchdog);
+      runtimeSetupWatchdog = null;
+    }
+
+    if (state === 'loading') {
+      runtimeSetupWatchdog = window.setTimeout(() => {
+        logRuntimeSetup('still waiting for final setup callback', {
+          state: runtimeSetupState,
+          message: runtimeAccuracyStatus?.textContent || runtimeSetupStatus?.textContent || '',
+          hint: 'Expected SETUP_RUNTIME_SUCCESS, SETUP_RUNTIME_FAILED, or SETUP_RUNTIME_CANCELLED from VS Code bridge.'
+        });
+      }, 30000);
+    }
 
     if (runtimeSetupStatus) {
       runtimeSetupStatus.textContent = message;
@@ -123,12 +153,36 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
       runtimeSetupBtn.classList.toggle('loading', state === 'loading');
       runtimeSetupBtn.textContent = state === 'loading' ? 'Setting Up' : 'Setup Runtime';
     }
+
+    if (runtimeAccuracyStatus) {
+      runtimeAccuracyStatus.textContent = message;
+      runtimeAccuracyStatus.classList.toggle('success', state === 'success');
+      runtimeAccuracyStatus.classList.toggle('error', state === 'error');
+    }
+
+    if (runtimeAccuracySetupBtn) {
+      runtimeAccuracySetupBtn.disabled = state === 'loading' || state === 'success';
+      runtimeAccuracySetupBtn.classList.toggle('loading', state === 'loading');
+      runtimeAccuracySetupBtn.classList.toggle('success', state === 'success');
+      runtimeAccuracySetupBtn.textContent = state === 'loading'
+        ? 'Setting Up'
+        : state === 'success'
+          ? 'Runtime Ready'
+          : 'Setup Runtime';
+    }
+
+    logRuntimeSetup('buttons updated', {
+      state,
+      settingsButtonText: runtimeSetupBtn?.textContent || null,
+      settingsButtonDisabled: Boolean(runtimeSetupBtn?.disabled),
+      calloutButtonText: runtimeAccuracySetupBtn?.textContent || null,
+      calloutButtonDisabled: Boolean(runtimeAccuracySetupBtn?.disabled)
+    });
   }
 
-  runtimeSetupBtn?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    logRuntimeSetup('button clicked');
-    if (runtimeSetupBtn.disabled) {
+  function requestRuntimeSetup(source: string) {
+    logRuntimeSetup('button clicked', { source });
+    if (runtimeSetupState === 'loading') {
       logRuntimeSetup('click ignored because setup is already running');
       return;
     }
@@ -136,8 +190,21 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
     logRuntimeSetup('sending bridge command', { action: 'SETUP_RUNTIME' });
     sendMessage({
       action: 'BRIDGE_COMMAND',
-      payload: { action: 'SETUP_RUNTIME' }
+      payload: {
+        action: 'SETUP_RUNTIME',
+        requestId: `runtime-${Date.now()}-${Math.random().toString(16).slice(2)}`
+      }
     });
+  }
+
+  runtimeSetupBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    requestRuntimeSetup('settings');
+  });
+
+  runtimeAccuracySetupBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    requestRuntimeSetup('selection-callout');
   });
 
   headerLocateBtn?.addEventListener('click', (e) => {
@@ -210,6 +277,7 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
 
     selectionEmptyState?.classList.toggle('hidden', hasSelection);
     comparisonWorkspace?.classList.toggle('hidden', !hasSelection);
+    runtimeAccuracyCallout?.classList.toggle('hidden', !hasSelection || Boolean(extractedData?.sourceLoc));
     
     // When an element is selected, we can shrink Step 1 or emphasize Step 2.
     if (hasSelection) {
@@ -262,6 +330,14 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
     if (port) {
       port.onMessage.addListener((msg: any) => {
       debugLog('[Panel] Port message received:', msg.action);
+      if (String(msg?.action || '').startsWith('SETUP_RUNTIME') || msg?.action === 'BRIDGE_ERROR') {
+        logRuntimeSetup('port message received', {
+          action: msg.action,
+          message: msg.message,
+          error: msg.error,
+          currentState: runtimeSetupState
+        });
+      }
       
       if (msg.action === 'BRIDGE_CONNECTED') {
         const bridgeBadge = document.getElementById('bridge-status');
@@ -269,6 +345,15 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
           bridgeBadge.textContent = 'Connected';
           bridgeBadge.className = 'status-badge connected';
         }
+        if (tailwindMode !== 'off') {
+          requestTailwindConfig(false);
+        }
+      } else if (msg.action === 'BRIDGE_PORT_FALLBACK') {
+        const bridgePortInput = document.getElementById('bridge-port') as HTMLInputElement | null;
+        if (bridgePortInput && msg.port) {
+          bridgePortInput.value = String(msg.port);
+        }
+        setSelectionStatus(`Bridge port ${msg.previousPort} was unavailable, so UI Checker switched to ${msg.port}.`, 'success');
       } else if (msg.action === 'BRIDGE_DISCONNECTED') {
         const bridgeBadge = document.getElementById('bridge-status');
         if (bridgeBadge) {
@@ -341,6 +426,16 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
         }
       } else if (msg.action === 'APPLY_FIX_RESULT') {
         setSelectionStatus(msg.ok ? `Applied fix in ${msg.file?.split('/').pop() || 'VS Code'}.` : (msg.error || 'Could not apply fix automatically.'), msg.ok ? 'success' : 'error');
+      } else if (msg.action === 'APPLY_TAILWIND_CLASS_FIX_RESULT') {
+        if (msg.ok && msg.nextClassList && extractedData) {
+          extractedData.classList = msg.nextClassList;
+        }
+        setSelectionStatus(msg.ok ? `Applied Tailwind classes in ${msg.file?.split('/').pop() || 'VS Code'}.` : (msg.error || 'Could not apply Tailwind classes.'), msg.ok ? 'success' : 'error');
+      } else if (msg.action === 'TAILWIND_CONFIG_RESULT') {
+        tailwindTheme = msg.theme || null;
+        tailwindConfigFile = msg.file || null;
+        renderTailwindStatus(msg.warning);
+        if (lastDiffReport) runComparison();
       }
       
       // New: Handle MCP responses
@@ -623,6 +718,7 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
     figma: { el: document.getElementById('section-figma'), key: 'figmaConnectionExpanded' },
     mappings: { el: document.getElementById('section-mappings'), key: 'variableMappingsExpanded' },
     tokens: { el: document.getElementById('section-tokens'), key: 'designTokensExpanded' },
+    tailwind: { el: document.getElementById('section-tailwind'), key: 'tailwindSettingsExpanded' },
     savedChecks: { el: document.getElementById('section-saved-checks'), key: 'savedChecksExpanded' },
     privacy: { el: document.getElementById('section-privacy'), key: 'privacySettingsExpanded' }
   };
@@ -784,6 +880,7 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
       'toleranceRulesExpanded', 
       'bridgeSettingsExpanded',
       'designTokensExpanded',
+      'tailwindSettingsExpanded',
       'savedChecksExpanded',
       'privacySettingsExpanded',
       'debugLogging'
@@ -802,6 +899,7 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
       if (result.toleranceRulesExpanded) sections.tolerance.el?.classList.add('is-expanded');
       if (result.bridgeSettingsExpanded) sections.bridge.el?.classList.add('is-expanded');
       if (result.designTokensExpanded) sections.tokens.el?.classList.add('is-expanded');
+      if (result.tailwindSettingsExpanded) sections.tailwind.el?.classList.add('is-expanded');
       if (result.savedChecksExpanded) sections.savedChecks.el?.classList.add('is-expanded');
       if (result.privacySettingsExpanded) sections.privacy.el?.classList.add('is-expanded');
 
@@ -847,6 +945,9 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
     extractedData = data;
     lastFetchedProps = null;
     updateSelectionLayout();
+    if (!data.sourceLoc && runtimeSetupState === 'idle') {
+      setRuntimeSetupState('idle', DEFAULT_RUNTIME_ACCURACY_MESSAGE);
+    }
 
     elementInfo.classList.remove('hidden');
     elementName.textContent = data.element;
@@ -960,6 +1061,47 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
     if (tokenClearBtn) tokenClearBtn.disabled = designTokens.length === 0;
   }
 
+  function renderTailwindStatus(warning?: string) {
+    if (!tailwindStatus) return;
+
+    tailwindStatus.classList.remove('error', 'success');
+
+    if (tailwindMode === 'off') {
+      tailwindStatus.textContent = 'Tailwind suggestions are off.';
+      return;
+    }
+
+    if (warning) {
+      tailwindStatus.textContent = warning;
+      tailwindStatus.classList.add('error');
+      return;
+    }
+
+    if (tailwindConfigFile) {
+      tailwindStatus.textContent = `Using ${tailwindConfigFile.split('/').pop()} plus the default Tailwind scale.`;
+      tailwindStatus.classList.add('success');
+      return;
+    }
+
+    tailwindStatus.textContent = 'Using the default Tailwind scale. Connect the VS Code bridge to load project config.';
+  }
+
+  function requestTailwindConfig(showLoading = true) {
+    if (tailwindMode === 'off') {
+      renderTailwindStatus();
+      return;
+    }
+
+    if (showLoading && tailwindStatus) {
+      tailwindStatus.textContent = 'Loading Tailwind config from VS Code...';
+    }
+
+    sendMessage({
+      action: 'BRIDGE_COMMAND',
+      payload: { action: 'GET_TAILWIND_CONFIG' }
+    });
+  }
+
   function renderFigmaTokenStatus(hasToken = Boolean(mcpTokenInput?.value?.trim())) {
     if (!figmaTokenStatus) return;
     figmaTokenStatus.textContent = hasToken
@@ -1030,9 +1172,23 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
     if (lastDiffReport) runComparison();
   });
 
+  tailwindModeSelect?.addEventListener('change', () => {
+    tailwindMode = (tailwindModeSelect.value as TailwindMode) || 'off';
+    chrome.storage?.local.set({ tailwindSettings: { mode: tailwindMode } });
+    renderTailwindStatus();
+    if (tailwindMode !== 'off') {
+      requestTailwindConfig();
+    }
+    if (lastDiffReport) runComparison();
+  });
+
+  tailwindRefreshBtn?.addEventListener('click', () => {
+    requestTailwindConfig();
+  });
+
   // Load saved settings
   if (chrome.storage) {
-    chrome.storage.local.get(['tolerance', 'bridgePort', 'designTokens'], (result) => {
+    chrome.storage.local.get(['tolerance', 'bridgePort', 'designTokens', 'tailwindSettings'], (result) => {
       if (result.tolerance) {
         if (result.tolerance.spacing !== undefined) (document.getElementById('tol-spacing') as HTMLInputElement).value = result.tolerance.spacing;
         if (result.tolerance.color !== undefined) (document.getElementById('tol-color') as HTMLInputElement).value = result.tolerance.color;
@@ -1044,10 +1200,19 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
       if (Array.isArray(result.designTokens)) {
         designTokens = result.designTokens;
       }
+      if (result.tailwindSettings?.mode) {
+        tailwindMode = result.tailwindSettings.mode;
+        if (tailwindModeSelect) tailwindModeSelect.value = tailwindMode;
+      }
       renderTokenStatus();
+      renderTailwindStatus();
+      if (tailwindMode !== 'off') {
+        requestTailwindConfig(false);
+      }
     });
   } else {
     renderTokenStatus();
+    renderTailwindStatus();
   }
 
   // Save settings on change
@@ -1097,12 +1262,18 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
         designTokens,
         varInfo?.varName
       );
+      const tailwindSuggestion = TailwindMapper.suggest(result.property, result.expected, {
+        mode: tailwindMode,
+        projectTheme: tailwindTheme,
+        rootFontSize
+      });
 
       return {
         ...result,
         sourceExpected,
         sourceDeclaration: sourceDeclarations[result.property] || `${result.property}: ${sourceExpected};`,
-        tokenValidation
+        tokenValidation,
+        tailwindSuggestion
       };
     });
 
@@ -1189,10 +1360,10 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
 
     if (mismatches.length > 0) {
       lines.push('### Mismatches');
-      lines.push('| Property | Expected (Figma) | Actual (DOM) | Severity | Token |');
-      lines.push('|---|---|---|---|---|');
+      lines.push('| Property | Expected (Figma) | Actual (DOM) | Severity | Token | Tailwind |');
+      lines.push('|---|---|---|---|---|---|');
       for (const r of mismatches) {
-        lines.push(`| ${r.property} | ${r.sourceExpected ?? r.expected ?? '—'} | ${r.actual ?? '—'} | ${r.severity || r.status} | ${formatTokenReportValue(r)} |`);
+        lines.push(`| ${r.property} | ${r.sourceExpected ?? r.expected ?? '—'} | ${r.actual ?? '—'} | ${r.severity || r.status} | ${formatTokenReportValue(r)} | ${formatTailwindReportValue(r)} |`);
       }
       lines.push('');
     }
@@ -1463,6 +1634,7 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
       expectedCol.appendChild(createValueElement(r.sourceExpected ?? r.expected, ''));
       appendTokenValidation(expectedCol, r);
     }
+    appendTailwindSuggestion(expectedCol, r);
     row.appendChild(expectedCol);
 
     const actualCol = document.createElement('span');
@@ -1571,6 +1743,7 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
           }, 2000);
         });
         actions.appendChild(applyBtn);
+        appendTailwindActions(actions, r);
         actualCol.appendChild(actions);
       }
     } else {
@@ -1578,10 +1751,85 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
       nA.className = 'result-value missing';
       nA.textContent = 'n/a';
       actualCol.appendChild(nA);
+      if (r.tailwindSuggestion) {
+        const actions = document.createElement('div');
+        actions.className = 'result-actions';
+        actions.style.display = 'inline-flex';
+        actions.style.gap = '4px';
+        actions.style.marginLeft = '8px';
+        appendTailwindActions(actions, r);
+        actualCol.appendChild(actions);
+      }
     }
     row.appendChild(actualCol);
 
     return row;
+  }
+
+  function appendTailwindSuggestion(parent: HTMLElement, r: any) {
+    const suggestion = r.tailwindSuggestion;
+    if (!suggestion) return;
+
+    const chip = document.createElement('span');
+    chip.className = `tailwind-chip tailwind-chip--${suggestion.confidence}`;
+    chip.title = `${suggestion.reason} (${suggestion.distanceLabel})`;
+    chip.textContent = suggestion.className;
+    parent.appendChild(chip);
+  }
+
+  function appendTailwindActions(parent: HTMLElement, r: any) {
+    const suggestion = r.tailwindSuggestion;
+    if (!suggestion) return;
+
+    const patch = TailwindMapper.buildClassPatch(extractedData?.classList || '', suggestion, tailwindTheme);
+
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'btn btn-xs tailwind-action-btn';
+    copyBtn.textContent = 'Copy TW';
+    copyBtn.title = patch.remove.length > 0
+      ? `Copy ${suggestion.className}; replaces ${patch.remove.join(', ')}`
+      : `Copy ${suggestion.className}`;
+    copyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      navigator.clipboard.writeText(suggestion.className).then(() => {
+        copyBtn.textContent = 'Copied';
+        setTimeout(() => { copyBtn.textContent = 'Copy TW'; }, 1000);
+      });
+    });
+    parent.appendChild(copyBtn);
+
+    const applyBtn = document.createElement('button');
+    applyBtn.className = 'btn btn-xs bridge-btn tailwind-action-btn';
+    applyBtn.textContent = 'Apply TW';
+    applyBtn.title = patch.before
+      ? `Preview in VS Code: ${patch.before} -> ${patch.after}`
+      : `Add ${suggestion.className} through the VS Code bridge`;
+    applyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!lastDiffReport) return;
+      applyBtn.classList.add('loading');
+      applyBtn.textContent = 'Applying';
+      sendMessage({
+        action: 'BRIDGE_COMMAND',
+        payload: {
+          action: 'APPLY_TAILWIND_CLASS_FIX',
+          selector: lastDiffReport.element,
+          ancestors: extractedData?.ancestors ?? [],
+          sourceLoc: extractedData?.sourceLoc ?? null,
+          sourceName: extractedData?.sourceName ?? null,
+          property: r.property,
+          value: r.sourceExpected ?? r.expected,
+          className: suggestion.className,
+          currentClassList: extractedData?.classList || '',
+          nextClassList: patch.after
+        }
+      });
+      setTimeout(() => {
+        applyBtn.classList.remove('loading');
+        applyBtn.textContent = 'Apply TW';
+      }, 2000);
+    });
+    parent.appendChild(applyBtn);
   }
 
   function appendTokenValidation(parent: HTMLElement, r: any) {
@@ -1644,6 +1892,12 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
     return 'unmapped';
   }
 
+  function formatTailwindReportValue(result: any) {
+    const suggestion = result.tailwindSuggestion;
+    if (!suggestion) return 'n/a';
+    return `${suggestion.className} (${suggestion.confidence}, ${suggestion.distanceLabel})`;
+  }
+
   // --- Copy Report ---
   copyBtn.addEventListener('click', () => {
     if (!lastDiffReport) return;
@@ -1661,10 +1915,10 @@ import { DesignToken, DesignTokenValidator } from '../lib/design-token-validator
 
     if (mismatches.length > 0) {
       md += `### Mismatches (${mismatches.length})\n`;
-      md += `| Property | Expected (Figma) | Actual (Browser) | Severity | Token |\n`;
-      md += `|----------|-----------------|------------------|----------|-------|\n`;
+      md += `| Property | Expected (Figma) | Actual (Browser) | Severity | Token | Tailwind |\n`;
+      md += `|----------|-----------------|------------------|----------|-------|----------|\n`;
       for (const m of mismatches) {
-        md += `| ${m.property} | ${m.sourceExpected ?? m.expected} | ${m.actual ?? 'n/a'} | ${m.severity} | ${formatTokenReportValue(m)} |\n`;
+        md += `| ${m.property} | ${m.sourceExpected ?? m.expected} | ${m.actual ?? 'n/a'} | ${m.severity} | ${formatTokenReportValue(m)} | ${formatTailwindReportValue(m)} |\n`;
       }
       md += '\n';
     }

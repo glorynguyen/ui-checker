@@ -18,10 +18,11 @@ const FIGMA_TAB_URL_PATTERNS = [
 ];
 
 function logRuntimeSetup(event: string, details?: Record<string, unknown>) {
+  const prefix = '[SW][RuntimeSetup]';
   if (details) {
-    debugLog(`[SW][RuntimeSetup] ${event}`, details);
+    console.log(`${prefix} ${event}`, details);
   } else {
-    debugLog(`[SW][RuntimeSetup] ${event}`);
+    console.log(`${prefix} ${event}`);
   }
 }
 
@@ -43,6 +44,7 @@ interface CacheMeta {
 
 // --- VS Code Bridge (WebSocket) ---
 let bridgeSocket: WebSocket | null = null;
+const DEFAULT_BRIDGE_PORT = 9876;
 const injectedTabs = new Set<number>();
 
 async function ensureContentScript(tabId: number) {
@@ -62,43 +64,110 @@ async function ensureContentScript(tabId: number) {
   }
 }
 
-async function connectToBridge() {
-  const result = await chrome.storage.local.get(['bridgePort']);
-  const port = result.bridgePort || 9876;
+function openBridgeSocket(port: number): Promise<WebSocket> {
+  return new Promise((resolve, reject) => {
+    debugLog(`[SW] Attempting WebSocket connection to ws://localhost:${port}`);
+    const socket = new WebSocket(`ws://localhost:${port}`);
+    let settled = false;
+    let opened = false;
 
-  if (bridgeSocket && bridgeSocket.readyState === WebSocket.OPEN) return;
-
-  debugLog(`[SW] Attempting WebSocket connection to ws://localhost:${port}`);
-  try {
-    bridgeSocket = new WebSocket(`ws://localhost:${port}`);
-
-    bridgeSocket.onopen = () => {
-      debugLog('[SW] SUCCESS: Connected to VS Code Bridge');
-      notifyPanelPorts({ action: 'BRIDGE_CONNECTED' });
+    const fail = (err?: unknown) => {
+      if (settled) return;
+      settled = true;
+      try { socket.close(); } catch { /* noop */ }
+      reject(err instanceof Error ? err : new Error(`Could not connect to VS Code on port ${port}`));
     };
 
-    bridgeSocket.onmessage = (event) => {
+    socket.onopen = () => {
+      settled = true;
+      opened = true;
+      debugLog('[SW] SUCCESS: Connected to VS Code Bridge');
+      notifyPanelPorts({ action: 'BRIDGE_CONNECTED' });
+      resolve(socket);
+    };
+
+    socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
       debugLog('[SW] RECEIVE FROM BRIDGE:', data);
+      if (String(data?.action || '').startsWith('SETUP_RUNTIME')) {
+        logRuntimeSetup('received bridge message', {
+          action: data.action,
+          message: data.message,
+          error: data.error,
+          panelPortCount: panelPorts.size
+        });
+      }
       notifyPanelPorts(data);
     };
 
-    bridgeSocket.onclose = () => {
+    socket.onclose = () => {
+      if (!settled) {
+        fail();
+        return;
+      }
+      if (!opened) return;
       debugLog('[SW] Bridge connection closed');
       notifyPanelPorts({ action: 'BRIDGE_DISCONNECTED' });
     };
 
-    bridgeSocket.onerror = (err) => {
+    socket.onerror = (err) => {
       console.error('[SW] Bridge WebSocket Error:', err);
+      fail(err);
     };
+  });
+}
+
+async function connectToBridge(): Promise<boolean> {
+  const result = await chrome.storage.local.get(['bridgePort']);
+  const savedPort = Number(result.bridgePort) || DEFAULT_BRIDGE_PORT;
+
+  if (bridgeSocket && bridgeSocket.readyState === WebSocket.OPEN) return true;
+
+  try {
+    bridgeSocket = await openBridgeSocket(savedPort);
+    return true;
   } catch (e) {
-    console.error('[SW] Failed to create WebSocket:', e);
+    if (savedPort === DEFAULT_BRIDGE_PORT) {
+      console.error('[SW] Failed to connect to VS Code Bridge:', e);
+      return false;
+    }
+
+    debugLog(`[SW] Saved bridge port ${savedPort} failed; trying default ${DEFAULT_BRIDGE_PORT}`);
+    try {
+      bridgeSocket = await openBridgeSocket(DEFAULT_BRIDGE_PORT);
+      await chrome.storage.local.set({ bridgePort: DEFAULT_BRIDGE_PORT });
+      notifyPanelPorts({
+        action: 'BRIDGE_PORT_FALLBACK',
+        port: DEFAULT_BRIDGE_PORT,
+        previousPort: savedPort
+      });
+      return true;
+    } catch (fallbackError) {
+      console.error('[SW] Failed to connect to VS Code Bridge:', fallbackError);
+      return false;
+    }
   }
 }
 
 function notifyPanelPorts(msg: any) {
+  if (String(msg?.action || '').startsWith('SETUP_RUNTIME') || msg?.action === 'BRIDGE_ERROR') {
+    logRuntimeSetup('forwarding message to panel ports', {
+      action: msg.action,
+      panelPortCount: panelPorts.size
+    });
+  }
+
   for (const port of panelPorts.values()) {
-    try { port.postMessage(msg); } catch (_) {}
+    try {
+      port.postMessage(msg);
+    } catch (error) {
+      if (String(msg?.action || '').startsWith('SETUP_RUNTIME') || msg?.action === 'BRIDGE_ERROR') {
+        logRuntimeSetup('failed to post message to panel', {
+          action: msg.action,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
   }
 }
 
@@ -115,7 +184,13 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 connectToBridge();
 
 async function attachNearestSourceLoc(payload: any, tabId: number | null) {
-  if (payload?.action !== 'FIND_SELECTOR' || tabId === null) {
+  const canUseNearestSource =
+    payload?.action === 'FIND_SELECTOR' ||
+    payload?.action === 'APPLY_FIX' ||
+    payload?.action === 'APPLY_TAILWIND_CLASS_FIX' ||
+    payload?.action === 'GET_PROPS';
+
+  if (!canUseNearestSource || tabId === null) {
     return payload;
   }
 
@@ -154,7 +229,9 @@ chrome.runtime.onConnect.addListener((port) => {
       debugLog('[SW] BRIDGE_COMMAND RECEIVED:', payload);
       if (payload?.action === 'SETUP_RUNTIME') {
         logRuntimeSetup('command received from panel', {
-          bridgeReadyState: bridgeSocket?.readyState ?? 'none'
+          bridgeReadyState: bridgeSocket?.readyState ?? 'none',
+          tabId,
+          panelPortCount: panelPorts.size
         });
       }
       if (!bridgeSocket || bridgeSocket.readyState !== WebSocket.OPEN) {
@@ -162,20 +239,18 @@ chrome.runtime.onConnect.addListener((port) => {
         if (payload?.action === 'SETUP_RUNTIME') {
           logRuntimeSetup('bridge socket not open; reconnecting before forwarding');
         }
-        await connectToBridge();
-        setTimeout(() => {
-          if (bridgeSocket && bridgeSocket.readyState === WebSocket.OPEN) {
-            if (payload?.action === 'SETUP_RUNTIME') {
-              logRuntimeSetup('forwarding setup command after reconnect');
-            }
-            bridgeSocket.send(JSON.stringify(payload));
-          } else {
-            if (payload?.action === 'SETUP_RUNTIME') {
-              logRuntimeSetup('failed to connect to bridge for setup command');
-            }
-            port.postMessage({ action: 'BRIDGE_ERROR', error: 'Could not connect to VS Code' });
+        const connected = await connectToBridge();
+        if (connected && bridgeSocket && bridgeSocket.readyState === WebSocket.OPEN) {
+          if (payload?.action === 'SETUP_RUNTIME') {
+            logRuntimeSetup('forwarding setup command after reconnect');
           }
-        }, 800);
+          bridgeSocket.send(JSON.stringify(payload));
+        } else {
+          if (payload?.action === 'SETUP_RUNTIME') {
+            logRuntimeSetup('failed to connect to bridge for setup command');
+          }
+          port.postMessage({ action: 'BRIDGE_ERROR', error: 'Could not connect to VS Code. Check the VS Code Bridge port in settings.' });
+        }
       } else {
         if (payload?.action === 'SETUP_RUNTIME') {
           logRuntimeSetup('forwarding setup command to VS Code bridge');

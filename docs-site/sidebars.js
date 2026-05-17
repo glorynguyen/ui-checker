@@ -12,6 +12,7 @@ const sidebars = {
         'workflows/compare-elements',
         'workflows/visual-overlay',
         'design-tokens',
+        'tailwind',
         'vscode-bridge'
       ]
     },

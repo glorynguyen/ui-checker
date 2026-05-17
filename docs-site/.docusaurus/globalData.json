@@ -41,6 +41,11 @@
               "sidebar": "mainSidebar"
             },
             {
+              "id": "tailwind",
+              "path": "/tailwind",
+              "sidebar": "mainSidebar"
+            },
+            {
               "id": "troubleshooting",
               "path": "/troubleshooting",
               "sidebar": "mainSidebar"

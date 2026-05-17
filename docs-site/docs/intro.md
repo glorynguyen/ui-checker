@@ -24,6 +24,7 @@ The extension is built around a fast loop:
 | CSS variable workflow | Resolve, override, save, import, and export `var()` fallback mappings. |
 | Visual overlay | Compare selected element screenshots with Figma images using onion-skin, side-by-side, and pixel-diff views. |
 | Design tokens | Import token JSON and flag hardcoded or unmapped expected values. |
+| Tailwind suggestions | Translate mismatches into default or project-configured Tailwind utility classes. |
 | VS Code bridge | Jump from a mismatch or active selection in DevTools to source code in VS Code. |
 | CI runner | Run style checks outside Chrome from a JSON config. |
 
@@ -43,6 +44,7 @@ Then load `chrome-extension/` as an unpacked extension in Chrome.
 - [Compare Elements](./workflows/compare-elements.md): the main DevTools workflow.
 - [Visual Overlay](./workflows/visual-overlay.md): screenshot and pixel comparison.
 - [Design Tokens](./design-tokens.md): token import and token coverage.
+- [Tailwind Suggestions](./tailwind.md): utility-class suggestions and bridge-assisted class fixes.
 - [VS Code Bridge](./vscode-bridge.md): editor navigation.
 - [CI Runner](./ci.md): automated style checks.
 - [Architecture](./architecture.md): extension modules and data flow.

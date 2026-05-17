@@ -219,6 +219,38 @@
           </div>
         </section>
 
+        <section id="section-tailwind" class="settings-card settings-card-wide collapsible-section">
+          <div class="settings-card-header">
+            <div class="header-main">
+              <div class="title-wrap">
+                <span class="caret">▶</span>
+                <div class="section-title">Tailwind Suggestions</div>
+              </div>
+              <p class="section-description">Translate Figma mismatches into project-aware Tailwind utility fixes.</p>
+            </div>
+          </div>
+
+          <div class="collapsible-content">
+            <div class="setting-list">
+              <label class="setting-row">
+                <span>Suggestion mode</span>
+                <select id="tailwind-mode-select" class="input-field">
+                  <option value="off">Off</option>
+                  <option value="strict">Strict matches</option>
+                  <option value="nearest">Nearest utility</option>
+                </select>
+              </label>
+              <div class="setting-row setting-row-action">
+                <div>
+                  <span>Project config</span>
+                  <p id="tailwind-status" class="setting-help">Tailwind suggestions are off.</p>
+                </div>
+                <button id="tailwind-refresh-btn" class="btn btn-sm bridge-btn" type="button">Load Config</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section id="section-saved-checks" class="settings-card settings-card-wide collapsible-section">
           <div class="settings-card-header">
             <div class="header-main">
@@ -356,6 +388,14 @@
           </button>
         </div>
       </div>
+    </div>
+
+    <div id="runtime-accuracy-callout" class="runtime-accuracy-callout hidden" role="status" aria-live="polite">
+      <div class="runtime-accuracy-copy">
+        <span class="runtime-accuracy-title">Runtime not detected</span>
+        <p id="runtime-accuracy-status">Locate in Code will use workspace search. Install the dev runtime for exact file and line jumps.</p>
+      </div>
+      <button id="runtime-accuracy-setup-btn" class="btn btn-sm bridge-btn" type="button">Setup Runtime</button>
     </div>
   </div>
 

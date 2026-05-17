@@ -1,0 +1,26 @@
+{
+  "id": "tailwind",
+  "title": "Tailwind Suggestions",
+  "description": "UI Checker can translate Figma style mismatches into Tailwind utility classes.",
+  "source": "@site/docs/tailwind.md",
+  "sourceDirName": ".",
+  "slug": "/tailwind",
+  "permalink": "/tailwind",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "id": "tailwind",
+    "title": "Tailwind Suggestions"
+  },
+  "sidebar": "mainSidebar",
+  "previous": {
+    "title": "Design Tokens",
+    "permalink": "/design-tokens"
+  },
+  "next": {
+    "title": "VS Code Bridge",
+    "permalink": "/vscode-bridge"
+  }
+}

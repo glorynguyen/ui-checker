@@ -1,11 +1,13 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import { execFile } from 'child_process';
 import { WebSocketServer, WebSocket } from 'ws';
-import { findEditableDeclaration } from './apply-fix';
+import { findEditableClassList, findEditableDeclaration } from './apply-fix';
 import { extractJsxProps } from './jsx-parser';
 import { SearchLogic, SearchMatch } from './search-logic';
 import { enumerateSearchableFiles, type FileEnumeratorDeps } from './file-enumerator';
+import { findTailwindConfig } from './tailwind-config';
 import {
   findSourceLocSuffixMatch,
   parseSourceLoc,
@@ -168,14 +170,14 @@ function startBridgeServer() {
 
             ws.send(JSON.stringify({
               action: 'SETUP_RUNTIME_STARTED',
-              message: 'Updating package.json and the app entry file...'
+              message: 'Updating package.json, app entry file, and installing dependencies...'
             }));
 
             const result = await setupRuntime();
             if (result.ok) {
               ws.send(JSON.stringify({
                 action: 'SETUP_RUNTIME_SUCCESS',
-                message: 'Runtime setup complete. Reload your app to stamp source locations.'
+                message: 'Runtime setup complete. Dependencies installed; reload your app to stamp source locations.'
               }));
             } else {
               ws.send(JSON.stringify({
@@ -210,6 +212,23 @@ function startBridgeServer() {
             const result = await applyFix(data);
             ws.send(JSON.stringify({
               action: 'APPLY_FIX_RESULT',
+              ...result
+            }));
+          }
+
+          if (data.action === 'APPLY_TAILWIND_CLASS_FIX') {
+            const result = await applyTailwindClassFix(data);
+            ws.send(JSON.stringify({
+              action: 'APPLY_TAILWIND_CLASS_FIX_RESULT',
+              ...result
+            }));
+          }
+
+          if (data.action === 'GET_TAILWIND_CONFIG') {
+            const roots = (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath);
+            const result = findTailwindConfig(roots);
+            ws.send(JSON.stringify({
+              action: 'TAILWIND_CONFIG_RESULT',
               ...result
             }));
           }
@@ -417,6 +436,65 @@ async function applyFix(data: any) {
   return { ok: true, file: match.file };
 }
 
+async function applyTailwindClassFix(data: any) {
+  const exact = data.sourceLoc ? await resolveExactSourceLoc(data.sourceLoc) : null;
+  const matches = exact
+    ? [exact]
+    : await findSelectorInWorkspace(data.selector, data.property, data.value, data.ancestors, data.sourceName);
+  const match = matches[0];
+
+  if (!match) {
+    return { ok: false, error: 'No source file found for this element.' };
+  }
+
+  const nextClassList = String(data.nextClassList || '').trim();
+  if (!nextClassList) {
+    return { ok: false, error: 'The Tailwind class patch was empty.' };
+  }
+
+  const document = await vscode.workspace.openTextDocument(match.file);
+  const text = document.getText();
+  const editTarget = findEditableClassList(text, match.line, data.currentClassList);
+
+  if (!editTarget) {
+    await openMatch(match);
+    return {
+      ok: false,
+      file: match.file,
+      error: 'Opened the likely source, but no static class or className string was found nearby.'
+    };
+  }
+
+  const confirmed = await vscode.window.showWarningMessage(
+    `[UI Checker] Apply Tailwind class fix for ${data.property || 'selected property'}?`,
+    {
+      modal: true,
+      detail: [
+        `File: ${match.file}`,
+        `Before: ${editTarget.currentValue}`,
+        `After:  ${nextClassList}`
+      ].join('\n')
+    },
+    'Apply Tailwind Fix'
+  );
+
+  if (confirmed !== 'Apply Tailwind Fix') {
+    return { ok: false, file: match.file, error: 'Tailwind fix cancelled in VS Code.' };
+  }
+
+  const edit = new vscode.WorkspaceEdit();
+  edit.replace(
+    vscode.Uri.file(match.file),
+    new vscode.Range(document.positionAt(editTarget.start), document.positionAt(editTarget.end)),
+    nextClassList
+  );
+
+  await vscode.workspace.applyEdit(edit);
+  await document.save();
+  await openMatch(match);
+  return { ok: true, file: match.file, nextClassList };
+}
+
 async function setupRuntime() {
   const folders = vscode.workspace.workspaceFolders;
   if (!folders || folders.length === 0) {
@@ -442,9 +520,12 @@ async function setupRuntime() {
 
       progress.report({ message: "Injecting import into entry point..." });
       await injectImport(entryFile);
+
+      progress.report({ message: "Running npm install..." });
+      await runNpmInstall(path.dirname(packageJson.fsPath));
     });
 
-    vscode.window.showInformationMessage('[UI Checker] Runtime setup complete. package.json was updated and the runtime import was added.');
+    vscode.window.showInformationMessage('[UI Checker] Runtime setup complete. package.json was updated, the runtime import was added, and npm install finished.');
     return { ok: true };
   } catch (error: any) {
     const message = error?.message || 'Unknown setup error.';
@@ -455,15 +536,32 @@ async function setupRuntime() {
 
 async function confirmRuntimeSetup() {
   const choice = await vscode.window.showWarningMessage(
-    '[UI Checker] Add @ui-checker/runtime to package.json and import it in your project entry file?',
+    '[UI Checker] Add @ui-checker/runtime, import it in your project entry file, and run npm install?',
     {
       modal: true,
-      detail: 'This edits package.json in the active VS Code workspace and updates the detected app entry file.'
+      detail: 'This edits package.json in the active VS Code workspace, updates the detected app entry file, then runs npm install in that package directory.'
     },
     'Update Files'
   );
 
   return choice === 'Update Files';
+}
+
+function runNpmInstall(cwd: string) {
+  const command = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+
+  return new Promise<void>((resolve, reject) => {
+    execFile(command, ['install'], { cwd, maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
+      if (error) {
+        const output = [stderr, stdout].filter(Boolean).join('\n').trim();
+        const details = output ? `\n${output}` : '';
+        reject(new Error(`npm install failed.${details}`));
+        return;
+      }
+
+      resolve();
+    });
+  });
 }
 
 async function findRuntimeEntryFile(root: vscode.Uri) {

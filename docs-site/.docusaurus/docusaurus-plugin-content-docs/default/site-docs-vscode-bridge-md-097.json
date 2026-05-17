@@ -16,8 +16,8 @@
   },
   "sidebar": "mainSidebar",
   "previous": {
-    "title": "Design Tokens",
-    "permalink": "/design-tokens"
+    "title": "Tailwind Suggestions",
+    "permalink": "/tailwind"
   },
   "next": {
     "title": "CI Runner",

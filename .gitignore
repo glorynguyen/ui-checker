@@ -1,5 +1,6 @@
 node_modules/
 dist/
+docs-site/build/
 coverage/
 .c8_output/
 .nyc_output/
