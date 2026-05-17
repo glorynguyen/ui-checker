@@ -1,3 +1,11 @@
+# [1.4.0](https://github.com/glorynguyen/ui-checker/compare/vscode-bridge-v1.3.0...vscode-bridge-v1.4.0) (2026-05-17)
+
+
+### Features
+
+* add shared UI comparison improvements ([8d8fe5b](https://github.com/glorynguyen/ui-checker/commit/8d8fe5b5d7e2c837a62f5d709b904dffeaabd57e))
+* **vscode-bridge:** add shared UI comparison improvements ([e19aada](https://github.com/glorynguyen/ui-checker/commit/e19aadadb73dd3c2477faa5db9496afea5753d8a))
+
 # [1.3.0](https://github.com/glorynguyen/ui-checker/compare/vscode-bridge-v1.2.0...vscode-bridge-v1.3.0) (2026-05-16)
 
 
