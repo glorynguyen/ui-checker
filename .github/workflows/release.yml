@@ -71,4 +71,5 @@ jobs:
           GOOGLE_CLIENT_ID: ${{ secrets.CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
           GOOGLE_REFRESH_TOKEN: ${{ secrets.REFRESH_TOKEN }}
+          DEBUG: semantic-release:*,semantic-release-chrome:*
         run: npx semantic-release
